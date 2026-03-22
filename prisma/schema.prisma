@@ -1,0 +1,369 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum RegType {
+  member
+  attendee
+  exhibitor
+  admin
+  sponsor
+}
+
+enum AdminType {
+  superadmin
+  support
+  moderator
+}
+
+enum RegistrationStatus {
+  pending_payment
+  registered
+  cancelled
+}
+
+enum SponsorStatus {
+  pending_pledge
+  pending_payment
+  active
+  cancelled
+}
+
+enum SponsorTier {
+  headliner
+  platinum
+  gold
+  silver
+}
+
+enum SessionStatus {
+  draft
+  published
+  cancelled
+}
+
+enum PaymentKind {
+  booth
+  masterclass
+  panel
+  hotel_room
+}
+
+enum PaymentStatus {
+  pending
+  success
+  failed
+  refunded
+}
+
+model User {
+  id                 String             @id @default(cuid())
+  email              String             @unique
+  password           String
+  regType            RegType
+  registrationStatus RegistrationStatus @default(pending_payment)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  member             Member?
+  attendee           Attendee?
+  exhibitor          Exhibitor?
+  admin              Admin?
+  sponsor            Sponsor?
+  refreshTokens      RefreshToken[]
+  payments           Payment[]
+  hotelRoomsBooked   HotelRoom[]      @relation("HotelRoomBooking")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model Admin {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  adminType AdminType
+  avatar    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+
+model Member {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug              String   @unique
+  fullName          String
+  phone             String
+  bio               String?
+  anpmpId           String
+  hasSpouse         Boolean
+  spouseName        String?
+  spouseEmail       String?
+  spousePhone       String?
+  primarySpecialty  String
+  hospitalOrg       String
+  avatar            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Attendee {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug             String   @unique
+  fullName         String
+  phone            String
+  bio              String?
+  inMedicalField   Boolean
+  primarySpecialty String?
+  hospitalOrg      String?
+  occupation       String?
+  avatar           String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Exhibitor {
+  id                  String       @id @default(cuid())
+  userId              String       @unique
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug                String       @unique
+  companyName         String
+  tagline             String?
+  description         String        @default("")
+  boothPreference     String?
+  /** Display tier for public listings (e.g. grouped with sponsors); set by admin */
+  tier                SponsorTier?
+  website             String?
+  contactEmail        String
+  primaryContactName  String
+  primaryContactPhone String
+  headerImage         String?
+  profileImage        String?
+  /** Incremented when public profile is tracked (see portal) */
+  profileViews        Int          @default(0)
+  /** Optional link for “book hotels for staff” etc. */
+  hotelBookingUrl     String?
+  booth               Booth?       @relation("BoothExhibitor")
+  representatives     ExhibitorRepresentative[]
+  products            ExhibitorProduct[]
+  leads               ExhibitorLead[]
+  payments            Payment[]
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([tier])
+}
+
+model ExhibitorProduct {
+  id          String    @id @default(cuid())
+  exhibitorId String
+  exhibitor   Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
+  name        String
+  description String    @default("")
+  imageUrl    String?
+  linkUrl     String?
+  sortOrder   Int       @default(0)
+  /** Incremented when a visitor uses the public WhatsApp inquiry redirect for this product */
+  whatsappClickCount Int @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([exhibitorId])
+}
+
+model ExhibitorLead {
+  id          String    @id @default(cuid())
+  exhibitorId String
+  exhibitor   Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
+  name        String?
+  email       String?
+  phone       String?
+  message     String?
+  createdAt   DateTime  @default(now())
+
+  @@index([exhibitorId])
+}
+
+model ExhibitorRepresentative {
+  id         String   @id @default(cuid())
+  exhibitorId String
+  exhibitor  Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
+  name       String
+  title      String
+  phone      String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([exhibitorId])
+}
+
+model HotelRoom {
+  id          String    @id @default(cuid())
+  hotelName   String
+  roomType    String
+  description String?
+  price       Int
+  isBooked    Boolean   @default(false)
+  isReserved  Boolean   @default(false)
+  bookedById  String?
+  bookedBy    User?     @relation("HotelRoomBooking", fields: [bookedById], references: [id], onDelete: SetNull)
+  payments    Payment[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([hotelName])
+  @@index([isBooked, isReserved])
+  @@index([bookedById])
+}
+
+model Booth {
+  id                 String     @id @default(cuid())
+  name               String
+  size               String
+  price              Int        // kobo (1 NGN = 100 kobo)
+  /** Slot image (e.g. Cloudinary URL), set at creation via multipart upload or URL */
+  boothImage         String?
+  description        String?
+  /** Display / pricing tier for this booth slot (e.g. zone); set when creating or by admin */
+  tier               SponsorTier?
+  isTaken            Boolean    @default(false)
+  isReserved         Boolean    @default(false)
+  takenById          String?    @unique
+  takenBy            Exhibitor? @relation("BoothExhibitor", fields: [takenById], references: [id], onDelete: SetNull)
+  sponsorTakenById   String?    @unique
+  sponsorTakenBy     Sponsor?   @relation("BoothSponsor", fields: [sponsorTakenById], references: [id], onDelete: SetNull)
+  payments           Payment[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([tier])
+}
+
+model RegistrationPlan {
+  id        String   @id @default(cuid())
+  name      String
+  price     Int      // kobo (1 NGN = 100 kobo)
+  perks     String[]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Sponsor {
+  id                  String        @id @default(cuid())
+  userId              String        @unique
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug                String        @unique
+  companyName         String
+  tagline             String?
+  description         String        @default("")
+  website             String?
+  contactEmail        String
+  primaryContactName  String
+  primaryContactPhone String
+  sponsorAmount       Int?          // kobo (must be >= 150,000,000 when set)
+  status              SponsorStatus @default(pending_pledge)
+  tier                SponsorTier?
+  logo                String?
+  headerImage         String?
+  boothId             String?       @unique
+  booth               Booth?        @relation("BoothSponsor")
+  masterclasses       Masterclass[]
+  panels              PanelSession[]
+  payments            Payment[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model Masterclass {
+  id          String        @id @default(cuid())
+  title       String
+  description String
+  startTime   DateTime
+  endTime     DateTime
+  location    String
+  priceInKobo Int
+  sponsorId   String?
+  sponsor     Sponsor?      @relation(fields: [sponsorId], references: [id], onDelete: SetNull)
+  status      SessionStatus @default(draft)
+  payments    Payment[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([sponsorId])
+}
+
+model PanelSession {
+  id          String        @id @default(cuid())
+  title       String
+  description String
+  startTime   DateTime
+  endTime     DateTime
+  location    String
+  priceInKobo Int
+  sponsorId   String?
+  sponsor     Sponsor?      @relation(fields: [sponsorId], references: [id], onDelete: SetNull)
+  status      SessionStatus @default(draft)
+  payments    Payment[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([sponsorId])
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  reference      String        @unique
+  kind           PaymentKind
+  baseAmount     Int
+  amount         Int
+  status         PaymentStatus @default(pending)
+  provider       String
+  providerResponse Json?
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exhibitorId    String?
+  exhibitor      Exhibitor?    @relation(fields: [exhibitorId], references: [id], onDelete: SetNull)
+  sponsorId      String?
+  sponsor        Sponsor?      @relation(fields: [sponsorId], references: [id], onDelete: SetNull)
+  boothId        String?
+  booth          Booth?        @relation(fields: [boothId], references: [id], onDelete: SetNull)
+  masterclassId  String?
+  masterclass    Masterclass?  @relation(fields: [masterclassId], references: [id], onDelete: SetNull)
+  panelSessionId String?
+  panelSession   PanelSession? @relation(fields: [panelSessionId], references: [id], onDelete: SetNull)
+  hotelRoomId    String?
+  hotelRoom      HotelRoom?    @relation(fields: [hotelRoomId], references: [id], onDelete: SetNull)
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([kind, boothId])
+  @@index([kind, masterclassId])
+  @@index([kind, panelSessionId])
+  @@index([kind, hotelRoomId])
+  @@index([userId])
+}
