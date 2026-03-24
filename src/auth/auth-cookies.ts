@@ -15,6 +15,45 @@ export function getDefaultRefreshCookieMaxAgeSeconds(): number {
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+/**
+ * Cross-origin SPA (different site than API) needs SameSite=None; browsers require Secure with None.
+ * Default: enabled in production, or set AUTH_COOKIE_CROSS_SITE=true (e.g. HTTPS staging).
+ * Local HTTP dev keeps Lax + insecure cookies unless AUTH_COOKIE_CROSS_SITE=true (then use HTTPS).
+ */
+function useCrossSiteAuthCookies(): boolean {
+  const raw = process.env.AUTH_COOKIE_CROSS_SITE?.trim().toLowerCase();
+  if (raw === 'true' || raw === '1') {
+    return true;
+  }
+  if (raw === 'false' || raw === '0') {
+    return false;
+  }
+  return isProduction;
+}
+
+function authCookieBaseOptions(): {
+  httpOnly: true;
+  secure: boolean;
+  sameSite: 'none' | 'lax';
+  path: string;
+} {
+  const crossSite = useCrossSiteAuthCookies();
+  if (crossSite) {
+    return {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      path: '/',
+    };
+  }
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax',
+    path: '/',
+  };
+}
+
 export function setAuthCookies(
   res: Response,
   accessToken: string,
@@ -22,12 +61,7 @@ export function setAuthCookies(
   accessMaxAgeSeconds: number,
   refreshMaxAgeSeconds: number,
 ) {
-  const cookieOptions = {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: 'lax' as const,
-    path: '/',
-  };
+  const cookieOptions = authCookieBaseOptions();
 
   res.cookie(ACCESS_TOKEN_COOKIE, accessToken, {
     ...cookieOptions,
@@ -42,10 +76,7 @@ export function setAuthCookies(
 
 export function clearAuthCookies(res: Response) {
   const cookieOptions = {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: 'lax' as const,
-    path: '/',
+    ...authCookieBaseOptions(),
     maxAge: 0,
   };
 
