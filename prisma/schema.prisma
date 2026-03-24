@@ -17,6 +17,8 @@ enum RegType {
   attendee
   company
   admin
+  speaker
+  special_guest
 }
 
 enum AdminType {
@@ -409,6 +411,16 @@ model Payment {
   @@index([kind, brandingSlotId])
   @@index([userId])
   @@index([companyId])
+}
+
+model GalleryItem {
+  id        String   @id @default(cuid())
+  imageUrl  String
+  caption   String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt(sort: Desc)])
 }
 
 enum SupportTicketCategory {

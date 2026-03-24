@@ -126,6 +126,12 @@ export class SupportTicketService {
           profileName: user.admin?.name ?? user.email,
           profileUrl: null,
         };
+      case 'speaker':
+      case 'special_guest':
+        return {
+          profileName: user.email,
+          profileUrl: null,
+        };
       default:
         break;
     }
@@ -149,6 +155,9 @@ export class SupportTicketService {
         return user.attendee?.fullName ?? user.email;
       case 'admin':
         return user.admin?.name ?? user.email;
+      case 'speaker':
+      case 'special_guest':
+        return user.email;
       default:
         return user.email;
     }

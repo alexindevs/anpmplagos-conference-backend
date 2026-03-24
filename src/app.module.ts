@@ -20,6 +20,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { HotelRoomModule } from './hotel-room/hotel-room.module';
 import { MarketingSlotsModule } from './marketing-slots/marketing-slots.module';
 import { SupportModule } from './support/support.module';
+import { GalleryModule } from './gallery/gallery.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { SupportModule } from './support/support.module';
     HotelRoomModule,
     MarketingSlotsModule,
     SupportModule,
+    GalleryModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
