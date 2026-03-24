@@ -34,9 +34,12 @@ export class AdminBoothController {
   @ApiOperation({
     summary: 'List all booths with occupant info (admin only)',
     description:
-      'Returns every booth slot. **`takenBy`** is set when the booth is assigned to an exhibitor or sponsor (`kind`, `id`, `name`, `slug`); otherwise `null`.',
+      'Returns every booth slot. **`takenBy`** is set when the booth is assigned to a company (`id`, `name`, `slug`); otherwise `null`.',
   })
-  @ApiResponse({ status: 200, description: 'All booths (sorted by tier, then name)' })
+  @ApiResponse({
+    status: 200,
+    description: 'All booths (sorted by tier, then name)',
+  })
   listAll() {
     return this.boothService.findAllForAdmin();
   }

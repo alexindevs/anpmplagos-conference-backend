@@ -13,8 +13,7 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
-  // Media (avatars, etc.) are served from Cloudinary URLs
-
+  
   // Swagger API documentation
   const config = new DocumentBuilder()
     .setTitle('ANPMP Conference Portal API')

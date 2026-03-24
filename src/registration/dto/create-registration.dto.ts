@@ -9,12 +9,12 @@ import {
 } from 'class-validator';
 export class CreateRegistrationBaseDto {
   @ApiProperty({
-    enum: ['member', 'attendee', 'exhibitor'],
+    enum: ['member', 'attendee', 'company'],
     example: 'member',
     description: 'Registration type',
   })
-  @IsEnum(['member', 'attendee', 'exhibitor'])
-  regType: 'member' | 'attendee' | 'exhibitor';
+  @IsEnum(['member', 'attendee', 'company'])
+  regType: 'member' | 'attendee' | 'company';
 
   @ApiProperty({
     example: 'dr.olatunji@example.com',

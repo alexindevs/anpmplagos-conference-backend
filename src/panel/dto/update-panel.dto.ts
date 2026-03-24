@@ -3,8 +3,8 @@ import {
   IsString,
   IsOptional,
   IsNumber,
-  IsDateString,
   IsEnum,
+  IsBoolean,
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -15,25 +15,12 @@ export class UpdatePanelDto {
   @IsOptional()
   title?: string;
 
-  @ApiPropertyOptional({ example: 'Panel discussion on emerging healthcare policies' })
+  @ApiPropertyOptional({
+    example: 'Panel discussion on emerging healthcare policies',
+  })
   @IsString()
   @IsOptional()
   description?: string;
-
-  @ApiPropertyOptional({ example: '2026-06-15T14:00:00Z' })
-  @IsDateString()
-  @IsOptional()
-  startTime?: string;
-
-  @ApiPropertyOptional({ example: '2026-06-15T16:00:00Z' })
-  @IsDateString()
-  @IsOptional()
-  endTime?: string;
-
-  @ApiPropertyOptional({ example: 'Conference Room B' })
-  @IsString()
-  @IsOptional()
-  location?: string;
 
   @ApiPropertyOptional({
     example: 250000000,
@@ -45,11 +32,6 @@ export class UpdatePanelDto {
   @IsOptional()
   priceInKobo?: number;
 
-  @ApiPropertyOptional({ example: 'cuid_sponsor_id' })
-  @IsString()
-  @IsOptional()
-  sponsorId?: string;
-
   @ApiPropertyOptional({
     enum: ['draft', 'published', 'cancelled'],
     example: 'published',
@@ -57,4 +39,11 @@ export class UpdatePanelDto {
   @IsEnum(['draft', 'published', 'cancelled'])
   @IsOptional()
   status?: 'draft' | 'published' | 'cancelled';
+
+  @ApiPropertyOptional({
+    description: 'Admin hold: slot cannot be purchased while reserved',
+  })
+  @IsBoolean()
+  @IsOptional()
+  isReserved?: boolean;
 }

@@ -1,0 +1,19 @@
+<div style="font-family: Arial, sans-serif; color: #222; border-left: 6px solid #d41121; padding: 12px 16px; background: #ffffff">
+  <p style="margin: 0 0 10px 0; color: #d41121; font-size: 16px;"><strong>Support ticket:</strong> {{title}}</p>
+  <p style="margin: 6px 0;"><strong>Ticket ID:</strong> {{ticketId}}</p>
+
+  <p style="margin: 6px 0;"><strong>Response:</strong></p>
+  <p style="white-space: pre-wrap; margin: 6px 0;">{{responseText}}</p>
+
+  <p style="margin: 6px 0;">
+    <strong>View ticket:</strong>
+    <a href="{{ticketUrl}}" style="color: #1e4d2b;">{{ticketUrl}}</a>
+  </p>
+
+  {{#if showProfileLink}}
+    <p style="margin: 6px 0;">
+      <strong>Your profile:</strong>
+      <a href="{{profileUrl}}" style="color: #1e4d2b;">{{profileName}}</a>
+    </p>
+  {{/if}}
+</div>

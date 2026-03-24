@@ -1,4 +1,11 @@
-import { Body, Controller, Post, Req, Res, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Req,
+  Res,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -65,10 +72,10 @@ export class RegistrationController {
           occupation: 'Healthcare Administrator',
         },
       },
-      exhibitor: {
-        summary: 'Exhibitor registration',
+      company: {
+        summary: 'Company registration',
         value: {
-          regType: 'exhibitor',
+          regType: 'company',
           email: 'contact@medicorp.com',
           password: 'securePassword123',
           companyName: 'MediCorp Solutions',
@@ -99,7 +106,7 @@ export class RegistrationController {
   @ApiResponse({
     status: 201,
     description:
-      'Registration created. For `regType: exhibitor`, sets `access_token` and `refresh_token` **httpOnly cookies** (same as `POST /api/auth/login`); JSON body includes `user` plus registration fields — tokens are not returned in JSON.',
+      'Registration created. For `regType: company`, sets `access_token` and `refresh_token` **httpOnly cookies** (same as `POST /api/auth/login`); JSON body includes `user` — tokens are not returned in JSON.',
     schema: {
       type: 'object',
       properties: {
@@ -113,7 +120,7 @@ export class RegistrationController {
         user: {
           type: 'object',
           description:
-            'Exhibitor only; includes exhibitor.id for booth / payments',
+            'Company only; includes company.id for booth / session / sponsorship payments',
         },
       },
     },

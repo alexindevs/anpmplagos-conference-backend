@@ -34,11 +34,15 @@ export interface AuthUser {
   id: string;
   email: string;
   regType: RegType;
-  admin?: { id: string; name: string; adminType: string; avatar: string | null };
+  admin?: {
+    id: string;
+    name: string;
+    adminType: string;
+    avatar: string | null;
+  };
   member?: { id: string; fullName: string };
   attendee?: { id: string; fullName: string };
-  exhibitor?: { id: string; companyName: string };
-  sponsor?: { id: string; companyName: string };
+  company?: { id: string; companyName: string };
 }
 
 @Injectable()
@@ -56,7 +60,7 @@ export class AuthService {
   async login(dto: LoginDto): Promise<AuthTokens> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
-      include: { admin: true, member: true, attendee: true, exhibitor: true, sponsor: true },
+      include: { admin: true, member: true, attendee: true, company: true },
     });
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
@@ -70,7 +74,7 @@ export class AuthService {
     return this.issueTokens(user);
   }
 
-  /** Issue access + refresh tokens (e.g. after exhibitor signup). */
+  /** Issue access + refresh tokens (e.g. after company signup). */
   async issueTokensForUserId(userId: string): Promise<AuthTokens> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -78,8 +82,7 @@ export class AuthService {
         admin: true,
         member: true,
         attendee: true,
-        exhibitor: true,
-        sponsor: true,
+        company: true,
       },
     });
     if (!user) {
@@ -99,8 +102,7 @@ export class AuthService {
             admin: true,
             member: true,
             attendee: true,
-            exhibitor: true,
-            sponsor: true,
+            company: true,
           },
         },
       },
@@ -141,11 +143,15 @@ export class AuthService {
     id: string;
     email: string;
     regType: RegType;
-    admin?: { id: string; name: string; adminType: string; avatar: string | null } | null;
+    admin?: {
+      id: string;
+      name: string;
+      adminType: string;
+      avatar: string | null;
+    } | null;
     member?: { id: string; fullName: string } | null;
     attendee?: { id: string; fullName: string } | null;
-    exhibitor?: { id: string; companyName: string } | null;
-    sponsor?: { id: string; companyName: string } | null;
+    company?: { id: string; companyName: string } | null;
   }): Promise<AuthTokens> {
     const payload: JwtPayload = {
       sub: user.id,
@@ -173,12 +179,18 @@ export class AuthService {
         adminType: user.admin.adminType,
         avatar: user.admin.avatar,
       };
-    if (user.member) authUser.member = { id: user.member.id, fullName: user.member.fullName };
-    if (user.attendee) authUser.attendee = { id: user.attendee.id, fullName: user.attendee.fullName };
-    if (user.exhibitor)
-      authUser.exhibitor = { id: user.exhibitor.id, companyName: user.exhibitor.companyName };
-    if (user.sponsor)
-      authUser.sponsor = { id: user.sponsor.id, companyName: user.sponsor.companyName };
+    if (user.member)
+      authUser.member = { id: user.member.id, fullName: user.member.fullName };
+    if (user.attendee)
+      authUser.attendee = {
+        id: user.attendee.id,
+        fullName: user.attendee.fullName,
+      };
+    if (user.company)
+      authUser.company = {
+        id: user.company.id,
+        companyName: user.company.companyName,
+      };
 
     const refreshToken = randomUUID();
     const refreshExpiry = new Date();
@@ -207,7 +219,7 @@ export class AuthService {
   async validateUser(payload: JwtPayload): Promise<AuthUser | null> {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      include: { admin: true, member: true, attendee: true, exhibitor: true, sponsor: true },
+      include: { admin: true, member: true, attendee: true, company: true },
     });
     if (!user) return null;
 
@@ -223,12 +235,18 @@ export class AuthService {
         adminType: user.admin.adminType,
         avatar: user.admin.avatar,
       };
-    if (user.member) authUser.member = { id: user.member.id, fullName: user.member.fullName };
-    if (user.attendee) authUser.attendee = { id: user.attendee.id, fullName: user.attendee.fullName };
-    if (user.exhibitor)
-      authUser.exhibitor = { id: user.exhibitor.id, companyName: user.exhibitor.companyName };
-    if (user.sponsor)
-      authUser.sponsor = { id: user.sponsor.id, companyName: user.sponsor.companyName };
+    if (user.member)
+      authUser.member = { id: user.member.id, fullName: user.member.fullName };
+    if (user.attendee)
+      authUser.attendee = {
+        id: user.attendee.id,
+        fullName: user.attendee.fullName,
+      };
+    if (user.company)
+      authUser.company = {
+        id: user.company.id,
+        companyName: user.company.companyName,
+      };
 
     return authUser;
   }

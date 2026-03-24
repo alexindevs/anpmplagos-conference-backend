@@ -1,10 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ExhibitorModule } from '../exhibitor/exhibitor.module';
-import { SponsorModule } from '../sponsor/sponsor.module';
+import { CompanyModule } from '../company/company.module';
 import { PublicDirectoryController } from './public-directory.controller';
 
 @Module({
-  imports: [ExhibitorModule, SponsorModule],
+  imports: [CompanyModule],
   controllers: [PublicDirectoryController],
 })
 export class DirectoryModule {}

@@ -1,0 +1,30 @@
+import { Module } from '@nestjs/common';
+import { MulterModule } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { CompanyController } from './company.controller';
+import { CompanyPortalController } from './company-portal.controller';
+import { CompanyAdminController } from './company-admin.controller';
+import { CompanyService } from './company.service';
+import { AuthModule } from '../auth/auth.module';
+import { BoothModule } from '../booth/booth.module';
+import { MarketingSlotsModule } from '../marketing-slots/marketing-slots.module';
+
+@Module({
+  imports: [
+    AuthModule,
+    BoothModule,
+    MarketingSlotsModule,
+    MulterModule.register({
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  ],
+  controllers: [
+    CompanyPortalController,
+    CompanyController,
+    CompanyAdminController,
+  ],
+  providers: [CompanyService],
+  exports: [CompanyService],
+})
+export class CompanyModule {}

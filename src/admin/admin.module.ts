@@ -7,20 +7,17 @@ import type { SignOptions } from 'jsonwebtoken';
 import { AdminBoothController } from './admin-booth.controller';
 import { AdminController } from './admin.controller';
 import { AdminDashboardController } from './admin-dashboard.controller';
-import { AdminExhibitorController } from './admin-exhibitor.controller';
 import { AdminProfileController } from './admin-profile.controller';
 import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminService } from './admin.service';
 import { AdminStorageService } from './admin-storage.service';
 import { AuthModule } from '../auth/auth.module';
 import { BoothModule } from '../booth/booth.module';
-import { ExhibitorModule } from '../exhibitor/exhibitor.module';
 
 @Module({
   imports: [
     AuthModule,
     BoothModule,
-    ExhibitorModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
@@ -40,7 +37,6 @@ import { ExhibitorModule } from '../exhibitor/exhibitor.module';
     AdminController,
     AdminBoothController,
     AdminDashboardController,
-    AdminExhibitorController,
     AdminProfileController,
   ],
   providers: [AdminService, AdminStorageService, AdminDashboardService],

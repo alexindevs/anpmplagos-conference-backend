@@ -1,11 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsString,
-  IsNotEmpty,
-  IsNumber,
-  IsDateString,
-  Min,
-} from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreatePanelDto {
@@ -18,19 +12,6 @@ export class CreatePanelDto {
   @IsString()
   @IsNotEmpty()
   description: string;
-
-  @ApiProperty({ example: '2026-06-15T14:00:00Z' })
-  @IsDateString()
-  startTime: string;
-
-  @ApiProperty({ example: '2026-06-15T16:00:00Z' })
-  @IsDateString()
-  endTime: string;
-
-  @ApiProperty({ example: 'Conference Room B' })
-  @IsString()
-  @IsNotEmpty()
-  location: string;
 
   @ApiProperty({
     example: 250000000,

@@ -1,31 +1,29 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BoothService } from './booth.service';
 
-@ApiTags('booths')
+@ApiTags('Booths (public)')
 @Controller('api/booths')
 export class BoothPublicController {
   constructor(private readonly boothService: BoothService) {}
 
   @Get('available')
   @ApiOperation({
-    summary: 'List booth slots open for purchase (excludes taken and reserved)',
+    summary: 'List booths available for purchase (public)',
     description:
-      'Same data as `GET /api/exhibitors/booths/available`. Use for booking UIs; does not include occupied booths.',
+      'Same data as `GET /api/companies/booths/available`. Use for booking UIs; does not include occupied booths.',
   })
-  @ApiResponse({ status: 200, description: 'Available booths only' })
   listAvailable() {
     return this.boothService.findAvailable();
   }
 
-  @Get('public')
+  @Get('directory')
   @ApiOperation({
-    summary: 'Public list of taken booths only (who holds each slot)',
+    summary: 'Public directory of occupied booths (public)',
     description:
-      'Returns only booths with **`isTaken: true`** (assigned to an exhibitor or sponsor). Empty and admin-reserved (untaken) slots are omitted. For **available** slots to purchase, use **`GET /api/booths/available`**. **slotTier** is the booth row/zone tier. **occupiedBy.tier** is the organisation’s tier. Exhibitor occupants are only listed when registration is **registered**.',
+      'Returns only booths with **`isTaken: true`** (assigned to a company). Empty and admin-reserved (untaken) slots are omitted. For **available** slots to purchase, use **`GET /api/booths/available`**. **slotTier** is the booth row/zone tier. **occupiedBy.effectiveDisplayTier** is the company’s effective tier (booth vs sponsorship).',
   })
-  @ApiResponse({ status: 200, description: 'Taken booths with occupancy info' })
-  listPublic() {
+  directory() {
     return this.boothService.findPublicDirectory();
   }
 }

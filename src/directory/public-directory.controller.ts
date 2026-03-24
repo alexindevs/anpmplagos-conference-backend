@@ -1,8 +1,7 @@
 import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SponsorTier } from '@prisma/client';
-import { ExhibitorService } from '../exhibitor/exhibitor.service';
-import { SponsorService } from '../sponsor/sponsor.service';
+import { CompanyService } from '../company/company.service';
 
 function parseTierQuery(raw: string | undefined): SponsorTier {
   if (raw == null || raw === '') {
@@ -10,9 +9,7 @@ function parseTierQuery(raw: string | undefined): SponsorTier {
   }
   const allowed = Object.values(SponsorTier) as string[];
   if (!allowed.includes(raw)) {
-    throw new BadRequestException(
-      `tier must be one of: ${allowed.join(', ')}`,
-    );
+    throw new BadRequestException(`tier must be one of: ${allowed.join(', ')}`);
   }
   return raw as SponsorTier;
 }
@@ -20,17 +17,14 @@ function parseTierQuery(raw: string | undefined): SponsorTier {
 @ApiTags('Public directory')
 @Controller('api/public')
 export class PublicDirectoryController {
-  constructor(
-    private readonly exhibitorService: ExhibitorService,
-    private readonly sponsorService: SponsorService,
-  ) {}
+  constructor(private readonly companyService: CompanyService) {}
 
   @Get('partners-by-tier')
   @ApiOperation({
     summary:
-      'List registered exhibitors and active sponsors for a display tier (public)',
+      'List registered companies whose effective display tier matches the query (public)',
     description:
-      'Exhibitors must have `tier` set (e.g. via admin) to appear; sponsors must be active with matching `tier`.',
+      'Effective tier is the higher of booth zone tier and highest paid sponsorship tier.',
   })
   @ApiQuery({
     name: 'tier',
@@ -40,10 +34,7 @@ export class PublicDirectoryController {
   })
   async partnersByTier(@Query('tier') tierRaw: string) {
     const tier = parseTierQuery(tierRaw);
-    const [exhibitors, sponsors] = await Promise.all([
-      this.exhibitorService.findPublic({ tier }),
-      this.sponsorService.findPublic({ tier }),
-    ]);
-    return { tier, exhibitors, sponsors };
+    const companies = await this.companyService.findPublic({ tier });
+    return { tier, companies };
   }
 }

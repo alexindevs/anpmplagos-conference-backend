@@ -36,7 +36,9 @@ export class ParseRegistrationFormPipe implements PipeTransform<
         return parseReps(v.toString('utf8'));
       }
 
-      const normalizeRep = (raw: unknown): { name: string; title: string; phone: string } | null => {
+      const normalizeRep = (
+        raw: unknown,
+      ): { name: string; title: string; phone: string } | null => {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
           return null;
         }
@@ -50,7 +52,10 @@ export class ParseRegistrationFormPipe implements PipeTransform<
         return { name, title, phone };
       };
 
-      const fromParsed = (parsed: unknown, sourceLabel: string): { name: string; title: string; phone: string }[] => {
+      const fromParsed = (
+        parsed: unknown,
+        sourceLabel: string,
+      ): { name: string; title: string; phone: string }[] => {
         if (parsed == null) {
           return [];
         }
@@ -159,7 +164,7 @@ export class ParseRegistrationFormPipe implements PipeTransform<
         value.occupation != null ? String(value.occupation) : undefined;
     }
 
-    if (dto.regType === 'exhibitor') {
+    if (dto.regType === 'company') {
       dto.companyName =
         value.companyName != null ? String(value.companyName) : undefined;
       dto.tagline = value.tagline != null ? String(value.tagline) : undefined;
@@ -181,27 +186,6 @@ export class ParseRegistrationFormPipe implements PipeTransform<
           ? String(value.primaryContactPhone)
           : undefined;
       dto.representatives = parseReps(value.representatives);
-    }
-
-    if (dto.regType === 'sponsor') {
-      dto.companyName =
-        value.companyName != null ? String(value.companyName) : undefined;
-      dto.tagline = value.tagline != null ? String(value.tagline) : undefined;
-      dto.description =
-        value.description != null ? String(value.description) : undefined;
-      dto.website = value.website != null ? String(value.website) : undefined;
-      dto.contactEmail =
-        value.contactEmail != null ? String(value.contactEmail) : undefined;
-      dto.primaryContactName =
-        value.primaryContactName != null
-          ? String(value.primaryContactName)
-          : undefined;
-      dto.primaryContactPhone =
-        value.primaryContactPhone != null
-          ? String(value.primaryContactPhone)
-          : undefined;
-      dto.sponsorAmount =
-        value.sponsorAmount != null ? Number(value.sponsorAmount) : undefined;
     }
 
     return dto;

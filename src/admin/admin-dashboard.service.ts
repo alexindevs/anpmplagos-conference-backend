@@ -9,9 +9,8 @@ export const RECENT_REGISTRATIONS_LIMIT = 20;
 const REG_TYPE_LABELS: Record<RegType, string> = {
   member: 'Member',
   attendee: 'Attendee',
-  exhibitor: 'Exhibitor',
+  company: 'Company',
   admin: 'Administrator',
-  sponsor: 'Sponsor',
 };
 
 const recentUserSelect = {
@@ -21,8 +20,7 @@ const recentUserSelect = {
   createdAt: true,
   member: { select: { fullName: true, avatar: true } },
   attendee: { select: { fullName: true, avatar: true } },
-  exhibitor: { select: { companyName: true, profileImage: true } },
-  sponsor: { select: { companyName: true, logo: true } },
+  company: { select: { companyName: true, logo: true, profileImage: true } },
   admin: { select: { name: true, avatar: true } },
 } satisfies Prisma.UserSelect;
 
@@ -57,10 +55,8 @@ export class AdminDashboardService {
         return user.member?.fullName ?? user.email;
       case 'attendee':
         return user.attendee?.fullName ?? user.email;
-      case 'exhibitor':
-        return user.exhibitor?.companyName ?? user.email;
-      case 'sponsor':
-        return user.sponsor?.companyName ?? user.email;
+      case 'company':
+        return user.company?.companyName ?? user.email;
       case 'admin':
         return user.admin?.name ?? user.email;
       default:
@@ -74,10 +70,8 @@ export class AdminDashboardService {
         return user.member?.avatar ?? null;
       case 'attendee':
         return user.attendee?.avatar ?? null;
-      case 'exhibitor':
-        return user.exhibitor?.profileImage ?? null;
-      case 'sponsor':
-        return user.sponsor?.logo ?? null;
+      case 'company':
+        return user.company?.logo ?? user.company?.profileImage ?? null;
       case 'admin':
         return user.admin?.avatar ?? null;
       default:
@@ -101,32 +95,32 @@ export class AdminDashboardService {
       totalRegistrations,
       totalMembers,
       totalAttendees,
-      totalExhibitors,
-      totalSponsors,
+      totalCompanies,
       totalBooths,
       availableBooths,
       reservedBooths,
       takenBooths,
       totalMasterclasses,
       totalPanels,
-      sponsors,
+      totalPresentations,
+      sponsorshipPlanRevenue,
       recentUsers,
       boothsAll,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.member.count(),
       this.prisma.attendee.count(),
-      this.prisma.exhibitor.count(),
-      this.prisma.sponsor.count(),
+      this.prisma.company.count(),
       this.prisma.booth.count(),
       this.prisma.booth.count({ where: { isTaken: false, isReserved: false } }),
       this.prisma.booth.count({ where: { isReserved: true } }),
       this.prisma.booth.count({ where: { isTaken: true } }),
       this.prisma.masterclass.count(),
       this.prisma.panelSession.count(),
-      this.prisma.sponsor.findMany({
-        where: { sponsorAmount: { not: null } },
-        select: { sponsorAmount: true, status: true },
+      this.prisma.presentation.count(),
+      this.prisma.payment.aggregate({
+        where: { kind: 'sponsorship_plan', status: 'success' },
+        _sum: { baseAmount: true },
       }),
       this.prisma.user.findMany({
         take: RECENT_REGISTRATIONS_LIMIT,
@@ -136,13 +130,13 @@ export class AdminDashboardService {
       this.boothService.findAllForAdmin(),
     ]);
 
-    const totalPledged = sponsors.reduce((sum, s) => sum + (s.sponsorAmount ?? 0), 0);
-    const totalActiveSponsorAmount = sponsors
-      .filter((s) => s.status === 'active')
-      .reduce((sum, s) => sum + (s.sponsorAmount ?? 0), 0);
-    const activeSponsors = sponsors.filter((s) => s.status === 'active').length;
+    const recentRegistrations = recentUsers.map((u) =>
+      this.toRecentRegistration(u),
+    );
 
-    const recentRegistrations = recentUsers.map((u) => this.toRecentRegistration(u));
+    const companySponsorshipTotals = await this.prisma.company.aggregate({
+      _sum: { sponsorshipPaidTotalKobo: true },
+    });
 
     return {
       recentRegistrations,
@@ -150,8 +144,7 @@ export class AdminDashboardService {
         total: totalRegistrations,
         members: totalMembers,
         attendees: totalAttendees,
-        exhibitors: totalExhibitors,
-        sponsors: totalSponsors,
+        companies: totalCompanies,
       },
       booths: {
         total: totalBooths,
@@ -163,12 +156,13 @@ export class AdminDashboardService {
       sessions: {
         masterclasses: totalMasterclasses,
         panels: totalPanels,
+        presentations: totalPresentations,
       },
       sponsorships: {
-        totalSponsors: totalSponsors,
-        activeSponsors: activeSponsors,
-        totalPledged: totalPledged,
-        totalActive: totalActiveSponsorAmount,
+        companyAccounts: totalCompanies,
+        paidPlanRevenueKobo: sponsorshipPlanRevenue._sum.baseAmount ?? 0,
+        recordedSponsorshipPaidTotalKobo:
+          companySponsorshipTotals._sum.sponsorshipPaidTotalKobo ?? 0,
       },
     };
   }

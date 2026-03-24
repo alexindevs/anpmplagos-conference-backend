@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMasterclassDto, UpdateMasterclassDto } from './dto';
 
@@ -9,14 +13,14 @@ export class MasterclassService {
   async findAll() {
     return this.prisma.masterclass.findMany({
       include: {
-        sponsor: {
+        takenBy: {
           select: {
             id: true,
             companyName: true,
           },
         },
       },
-      orderBy: { startTime: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -24,7 +28,7 @@ export class MasterclassService {
     const masterclass = await this.prisma.masterclass.findUnique({
       where: { id },
       include: {
-        sponsor: {
+        takenBy: {
           select: {
             id: true,
             companyName: true,
@@ -43,13 +47,10 @@ export class MasterclassService {
       data: {
         title: dto.title,
         description: dto.description,
-        startTime: new Date(dto.startTime),
-        endTime: new Date(dto.endTime),
-        location: dto.location,
         priceInKobo: dto.priceInKobo,
       },
       include: {
-        sponsor: {
+        takenBy: {
           select: {
             id: true,
             companyName: true,
@@ -67,21 +68,18 @@ export class MasterclassService {
       throw new NotFoundException(`Masterclass with ID ${id} not found`);
     }
 
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     if (dto.title !== undefined) updateData.title = dto.title;
     if (dto.description !== undefined) updateData.description = dto.description;
-    if (dto.startTime !== undefined) updateData.startTime = new Date(dto.startTime);
-    if (dto.endTime !== undefined) updateData.endTime = new Date(dto.endTime);
-    if (dto.location !== undefined) updateData.location = dto.location;
     if (dto.priceInKobo !== undefined) updateData.priceInKobo = dto.priceInKobo;
-    if (dto.sponsorId !== undefined) updateData.sponsorId = dto.sponsorId;
     if (dto.status !== undefined) updateData.status = dto.status;
+    if (dto.isReserved !== undefined) updateData.isReserved = dto.isReserved;
 
     return this.prisma.masterclass.update({
       where: { id },
       data: updateData,
       include: {
-        sponsor: {
+        takenBy: {
           select: {
             id: true,
             companyName: true,
@@ -97,6 +95,11 @@ export class MasterclassService {
     });
     if (!masterclass) {
       throw new NotFoundException(`Masterclass with ID ${id} not found`);
+    }
+    if (masterclass.isTaken) {
+      throw new BadRequestException(
+        'Cannot delete a masterclass slot that has been purchased',
+      );
     }
 
     await this.prisma.masterclass.delete({

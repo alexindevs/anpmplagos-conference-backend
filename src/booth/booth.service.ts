@@ -3,21 +3,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  Booth,
-  Prisma,
-  RegistrationStatus,
-  SponsorTier,
-} from '@prisma/client';
+import { Booth, Prisma, RegistrationStatus, SponsorTier } from '@prisma/client';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateBoothMultipartDto } from './dto/create-booth-multipart.dto';
+import { effectiveDisplayTier } from '../company/company-tier.util';
 
 const BOOTH_IMAGE_MAX_BYTES = 5 * 1024 * 1024; // 5MB
 
-/** Occupant when a booth is held by an exhibitor or sponsor (admin / dashboard). */
+/** Occupant when a booth is held by a company (admin / dashboard). */
 export type BoothAdminOccupant = {
-  kind: 'exhibitor' | 'sponsor';
   id: string;
   name: string;
   slug: string;
@@ -63,7 +58,7 @@ export class BoothService {
   }
 
   /**
-   * All booths for admin UIs: full inventory with **`takenBy`** (exhibitor or sponsor) when assigned.
+   * All booths for admin UIs: full inventory with **`takenBy`** (company) when assigned.
    */
   async findAllForAdmin(): Promise<BoothAdminListItem[]> {
     const boothRows = await this.prisma.booth.findMany({
@@ -72,29 +67,17 @@ export class BoothService {
         takenBy: {
           select: { id: true, companyName: true, slug: true },
         },
-        sponsorTakenBy: {
-          select: { id: true, companyName: true, slug: true },
-        },
       },
     });
 
     return boothRows.map((b) => {
-      let takenBy: BoothAdminOccupant | null = null;
-      if (b.takenBy) {
-        takenBy = {
-          kind: 'exhibitor',
-          id: b.takenBy.id,
-          name: b.takenBy.companyName,
-          slug: b.takenBy.slug,
-        };
-      } else if (b.sponsorTakenBy) {
-        takenBy = {
-          kind: 'sponsor',
-          id: b.sponsorTakenBy.id,
-          name: b.sponsorTakenBy.companyName,
-          slug: b.sponsorTakenBy.slug,
-        };
-      }
+      const takenBy = b.takenBy
+        ? {
+            id: b.takenBy.id,
+            name: b.takenBy.companyName,
+            slug: b.takenBy.slug,
+          }
+        : null;
 
       return {
         id: b.id,
@@ -145,9 +128,7 @@ export class BoothService {
 
     if (file?.buffer?.length) {
       if (file.mimetype !== 'image/jpeg' && file.mimetype !== 'image/png') {
-        throw new BadRequestException(
-          'boothImage must be a JPEG or PNG image',
-        );
+        throw new BadRequestException('boothImage must be a JPEG or PNG image');
       }
       if (file.size > BOOTH_IMAGE_MAX_BYTES) {
         throw new BadRequestException('boothImage must be at most 5MB');
@@ -190,16 +171,9 @@ export class BoothService {
             id: true,
             companyName: true,
             slug: true,
-            tier: true,
+            highestSponsorshipTier: true,
+            booth: { select: { tier: true } },
             user: { select: { registrationStatus: true } },
-          },
-        },
-        sponsorTakenBy: {
-          select: {
-            id: true,
-            companyName: true,
-            slug: true,
-            tier: true,
           },
         },
       },
@@ -209,37 +183,28 @@ export class BoothService {
       include: NonNullable<typeof publicBoothQuery.include>;
     }>;
 
-    const rows: BoothPublicRow[] = await this.prisma.booth.findMany(
-      publicBoothQuery,
-    );
+    const rows: BoothPublicRow[] =
+      await this.prisma.booth.findMany(publicBoothQuery);
 
     return rows.map((b) => {
       type Occupant = {
-        kind: 'exhibitor' | 'sponsor';
         companyName: string;
         slug: string;
-        /** Exhibitor/sponsor organisation tier (may differ from booth slot tier) */
-        tier: SponsorTier | null;
+        effectiveDisplayTier: SponsorTier | null;
       };
 
       let occupiedBy: Occupant | null = null;
 
       if (b.takenBy) {
-        if (b.takenBy.user.registrationStatus === RegistrationStatus.registered) {
+        if (
+          b.takenBy.user.registrationStatus === RegistrationStatus.registered
+        ) {
           occupiedBy = {
-            kind: 'exhibitor',
             companyName: b.takenBy.companyName,
             slug: b.takenBy.slug,
-            tier: b.takenBy.tier,
+            effectiveDisplayTier: effectiveDisplayTier(b.takenBy),
           };
         }
-      } else if (b.sponsorTakenBy) {
-        occupiedBy = {
-          kind: 'sponsor',
-          companyName: b.sponsorTakenBy.companyName,
-          slug: b.sponsorTakenBy.slug,
-          tier: b.sponsorTakenBy.tier,
-        };
       }
 
       return {
@@ -249,7 +214,6 @@ export class BoothService {
         price: b.price,
         boothImage: b.boothImage,
         description: b.description,
-        /** Tier of this booth slot / zone (set by admin) */
         slotTier: b.tier,
         isTaken: b.isTaken,
         isReserved: b.isReserved,
@@ -258,10 +222,7 @@ export class BoothService {
     });
   }
 
-  async assignToExhibitor(
-    boothId: string,
-    exhibitorId: string,
-  ): Promise<Booth> {
+  async assignToCompany(boothId: string, companyId: string): Promise<Booth> {
     const booth = await this.findById(boothId);
     if (!booth) {
       throw new NotFoundException(`Booth ${boothId} not found`);
@@ -277,7 +238,7 @@ export class BoothService {
       where: { id: boothId },
       data: {
         isTaken: true,
-        takenById: exhibitorId,
+        takenById: companyId,
       },
       include: { takenBy: true },
     });

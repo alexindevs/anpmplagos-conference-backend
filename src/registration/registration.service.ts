@@ -42,7 +42,7 @@ export class RegistrationService {
   }
 
   private async generateUniqueSlug(
-    model: 'member' | 'attendee' | 'exhibitor' | 'sponsor',
+    model: 'member' | 'attendee' | 'company',
     source: string,
   ): Promise<string> {
     const normalized = this.slugify(source);
@@ -62,15 +62,10 @@ export class RegistrationService {
                 where: { slug: candidate },
                 select: { id: true },
               })
-            : model === 'exhibitor'
-              ? await this.prisma.exhibitor.findUnique({
-                  where: { slug: candidate },
-                  select: { id: true },
-                })
-              : await this.prisma.sponsor.findUnique({
-                  where: { slug: candidate },
-                  select: { id: true },
-                });
+            : await this.prisma.company.findUnique({
+                where: { slug: candidate },
+                select: { id: true },
+              });
 
       if (!existing) {
         return candidate;
@@ -186,33 +181,34 @@ export class RegistrationService {
           avatar: imagePaths?.avatar,
         },
       });
-    } else if (dto.regType === 'exhibitor') {
-      const exhibitorDto = dto;
+    } else if (dto.regType === 'company') {
+      const companyDto = dto;
       const slug = await this.generateUniqueSlug(
-        'exhibitor',
-        exhibitorDto.companyName!,
+        'company',
+        companyDto.companyName!,
       );
-      const exhibitor = await this.prisma.exhibitor.create({
+      const company = await this.prisma.company.create({
         data: {
           userId: user.id,
           slug,
-          companyName: exhibitorDto.companyName!,
-          tagline: exhibitorDto.tagline ?? undefined,
-          description: exhibitorDto.description!,
-          boothPreference: exhibitorDto.boothPreference ?? undefined,
-          website: exhibitorDto.website ?? undefined,
-          contactEmail: exhibitorDto.contactEmail!,
-          primaryContactName: exhibitorDto.primaryContactName!,
-          primaryContactPhone: exhibitorDto.primaryContactPhone!,
+          companyName: companyDto.companyName!,
+          tagline: companyDto.tagline ?? undefined,
+          description: companyDto.description!,
+          boothPreference: companyDto.boothPreference ?? undefined,
+          website: companyDto.website ?? undefined,
+          contactEmail: companyDto.contactEmail!,
+          primaryContactName: companyDto.primaryContactName!,
+          primaryContactPhone: companyDto.primaryContactPhone!,
           headerImage: imagePaths?.headerImage,
           profileImage: imagePaths?.profileImage,
+          logo: imagePaths?.logo,
         },
       });
 
-      if (exhibitorDto.representatives?.length) {
-        await this.prisma.exhibitorRepresentative.createMany({
-          data: exhibitorDto.representatives.map((r) => ({
-            exhibitorId: exhibitor.id,
+      if (companyDto.representatives?.length) {
+        await this.prisma.companyRepresentative.createMany({
+          data: companyDto.representatives.map((r) => ({
+            companyId: company.id,
             name: r.name,
             title: r.title,
             phone: r.phone,
@@ -224,47 +220,6 @@ export class RegistrationService {
         where: { id: user.id },
         data: { registrationStatus: 'registered' },
       });
-    } else if (dto.regType === 'sponsor') {
-      const sponsorDto = dto;
-      const slug = await this.generateUniqueSlug(
-        'sponsor',
-        sponsorDto.companyName!,
-      );
-
-      // Validate sponsor amount if provided
-      if (
-        sponsorDto.sponsorAmount !== undefined &&
-        sponsorDto.sponsorAmount < 150000000
-      ) {
-        throw new BadRequestException(
-          'Sponsor amount must be at least ₦1,500,000 (150,000,000 kobo)',
-        );
-      }
-
-      // Update user registration status to 'registered' (no payment required at signup)
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { registrationStatus: 'registered' },
-      });
-
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      await this.prisma.sponsor.create({
-        data: {
-          userId: user.id,
-          slug,
-          companyName: sponsorDto.companyName!,
-          tagline: sponsorDto.tagline ?? undefined,
-          description: sponsorDto.description!,
-          website: sponsorDto.website ?? undefined,
-          contactEmail: sponsorDto.contactEmail!,
-          primaryContactName: sponsorDto.primaryContactName!,
-          primaryContactPhone: sponsorDto.primaryContactPhone!,
-          sponsorAmount: sponsorDto.sponsorAmount ?? undefined,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          logo: imagePaths?.logo,
-          headerImage: imagePaths?.headerImage,
-        },
-      });
     } else {
       const invalidType: string = dto.regType;
       throw new BadRequestException(`Invalid regType: ${invalidType}`);
@@ -273,22 +228,22 @@ export class RegistrationService {
     const base = {
       id: user.id,
       status:
-        dto.regType === 'sponsor'
+        dto.regType === 'company'
           ? 'registered'
           : this.mapRegistrationStatus(user.registrationStatus),
       createdAt: user.createdAt,
       message:
-        dto.regType === 'sponsor'
-          ? 'Sponsor registration successful.'
+        dto.regType === 'company'
+          ? 'Company registration successful.'
           : 'Registration saved. Complete payment to confirm.',
     };
 
-    if (dto.regType === 'exhibitor') {
+    if (dto.regType === 'company') {
       const tokens = await this.auth.issueTokensForUserId(user.id);
       return {
         ...base,
         status: 'registered',
-        message: 'Exhibitor registration successful.',
+        message: 'Company registration successful.',
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         expiresIn: tokens.expiresIn,

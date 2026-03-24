@@ -1,0 +1,36 @@
+<div style="font-family: Arial, sans-serif; color: #222; border-left: 6px solid #d41121; padding: 12px 16px; background: #ffffff">
+  <p style="margin: 0 0 10px 0; color: #d41121; font-size: 16px;"><strong>New Support Ticket</strong></p>
+
+  <p style="margin: 6px 0;"><strong>Ticket ID:</strong> {{ticketId}}</p>
+  <p style="margin: 6px 0;"><strong>Title:</strong> {{title}}</p>
+  <p style="margin: 6px 0;"><strong>User:</strong> {{profileName}} ({{userEmail}})</p>
+
+  {{#if showProfileLink}}
+    <p style="margin: 6px 0;">
+      <strong>User Profile:</strong>
+      <a href="{{profileUrl}}" style="color: #1e4d2b;">{{profileUrl}}</a>
+    </p>
+  {{else}}
+    <p style="margin: 6px 0;"><strong>User Profile:</strong> No public profile URL (e.g. admin account)</p>
+  {{/if}}
+
+  <p style="margin: 6px 0;"><strong>Category:</strong> {{categoryLabel}}</p>
+  <p style="margin: 6px 0;"><strong>Complaint:</strong></p>
+  <p style="white-space: pre-wrap; margin: 6px 0;">{{description}}</p>
+
+  <p style="margin: 6px 0;">
+    <strong>Support Page:</strong>
+    <a href="{{ticketUrl}}" style="color: #1e4d2b;">{{ticketUrl}}</a>
+  </p>
+
+  {{#if screenshots.length}}
+    <p style="margin: 6px 0;"><strong>Screenshots:</strong></p>
+    <ul>
+      {{#each screenshots}}
+        <li style="margin: 4px 0;"><a href="{{this}}" style="color: #1e4d2b;">Screenshot</a></li>
+      {{/each}}
+    </ul>
+  {{else}}
+    <p style="margin: 6px 0;"><strong>Screenshots:</strong> None</p>
+  {{/if}}
+</div>

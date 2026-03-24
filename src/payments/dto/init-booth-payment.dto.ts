@@ -1,11 +1,14 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class InitBoothPaymentDto {
-  @ApiProperty({ example: 'cuid_exhibitor_id' })
+  @ApiPropertyOptional({
+    description:
+      '**Admin only.** Company users must omit this; the server uses `user.company.id` from the JWT. Required for admin to specify which company pays.',
+  })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  exhibitorId: string;
+  companyId?: string;
 
   @ApiProperty({ example: 'cuid_booth_id' })
   @IsString()

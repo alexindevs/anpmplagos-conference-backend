@@ -10,13 +10,12 @@ import {
   MinLength,
   ValidateIf,
   ValidateNested,
-  ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CreateRepresentativeDto } from './create-representative.dto';
 
 type RegContext = {
-  regType?: 'member' | 'attendee' | 'exhibitor' | 'sponsor';
+  regType?: 'member' | 'attendee' | 'company';
   hasSpouse?: boolean;
   inMedicalField?: boolean;
 };
@@ -27,12 +26,12 @@ type RegContext = {
  */
 export class CreateRegistrationDto {
   @ApiProperty({
-    enum: ['member', 'attendee', 'exhibitor', 'sponsor'],
+    enum: ['member', 'attendee', 'company'],
     example: 'member',
     description: 'Registration type',
   })
-  @IsEnum(['member', 'attendee', 'exhibitor', 'sponsor'])
-  regType: 'member' | 'attendee' | 'exhibitor' | 'sponsor';
+  @IsEnum(['member', 'attendee', 'company'])
+  regType: 'member' | 'attendee' | 'company';
 
   @ApiProperty({
     example: 'dr.olatunji@example.com',
@@ -128,9 +127,9 @@ export class CreateRegistrationDto {
   @IsString()
   occupation?: string;
 
-  // Exhibitor & Sponsor shared
+  // Company
   @ApiProperty({ example: 'MediCorp Solutions', required: false })
-  @ValidateIf((o: RegContext) => o.regType === 'exhibitor' || o.regType === 'sponsor')
+  @ValidateIf((o: RegContext) => o.regType === 'company')
   @IsString()
   companyName?: string;
 
@@ -146,7 +145,7 @@ export class CreateRegistrationDto {
     example: 'A full description of your company for the conference directory',
     required: false,
   })
-  @ValidateIf((o: RegContext) => o.regType === 'exhibitor' || o.regType === 'sponsor')
+  @ValidateIf((o: RegContext) => o.regType === 'company')
   @IsString()
   @IsNotEmpty()
   description?: string;
@@ -160,21 +159,20 @@ export class CreateRegistrationDto {
   website?: string;
 
   @ApiProperty({ example: 'contact@medicorp.com', required: false })
-  @ValidateIf((o: RegContext) => o.regType === 'exhibitor' || o.regType === 'sponsor')
+  @ValidateIf((o: RegContext) => o.regType === 'company')
   @IsString()
   contactEmail?: string;
 
   @ApiProperty({ example: 'Sarah Jenkins', required: false })
-  @ValidateIf((o: RegContext) => o.regType === 'exhibitor' || o.regType === 'sponsor')
+  @ValidateIf((o: RegContext) => o.regType === 'company')
   @IsString()
   primaryContactName?: string;
 
   @ApiProperty({ example: '+234 800 555 6666', required: false })
-  @ValidateIf((o: RegContext) => o.regType === 'exhibitor' || o.regType === 'sponsor')
+  @ValidateIf((o: RegContext) => o.regType === 'company')
   @IsString()
   primaryContactPhone?: string;
 
-  // Exhibitor only
   @ApiProperty({ example: 'Hall A, near entrance', required: false })
   @IsOptional()
   @IsString()
@@ -184,22 +182,12 @@ export class CreateRegistrationDto {
     type: [CreateRepresentativeDto],
     required: false,
     description:
-      'Booth representatives (min 1). With multipart/form-data, send one field `representatives` as a JSON string (array of objects). Example: [{"name":"A","title":"Rep","phone":"+234..."}]',
+      'Optional booth representatives. With multipart/form-data, send `representatives` as a JSON string.',
   })
-  @ValidateIf((o: RegContext) => o.regType === 'exhibitor')
+  @ValidateIf((o: RegContext) => o.regType === 'company')
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1, { message: 'At least one representative is required' })
   @ValidateNested({ each: true })
   @Type(() => CreateRepresentativeDto)
   representatives?: CreateRepresentativeDto[];
-
-  // Sponsor only (reuses companyName, tagline, website, contactEmail, primaryContactName, primaryContactPhone from exhibitor)
-  @ApiProperty({
-    example: 150000000,
-    description: 'Sponsor amount in kobo (minimum 150,000,000 = ₦1,500,000)',
-    required: false,
-  })
-  @ValidateIf((o: RegContext) => o.regType === 'sponsor')
-  @IsOptional()
-  sponsorAmount?: number;
 }

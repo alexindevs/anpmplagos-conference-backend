@@ -16,7 +16,11 @@ export class HotelRoomService {
   findAvailable() {
     return this.prisma.hotelRoom.findMany({
       where: { isBooked: false, isReserved: false },
-      orderBy: [{ hotelName: 'asc' }, { roomType: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [
+        { hotelName: 'asc' },
+        { roomType: 'asc' },
+        { createdAt: 'asc' },
+      ],
     });
   }
 
@@ -25,6 +29,28 @@ export class HotelRoomService {
       where: { id },
       include: {
         bookedBy: { select: { id: true, email: true, regType: true } },
+      },
+    });
+  }
+
+  async listMyBookedRooms(userId: string) {
+    return this.prisma.hotelRoom.findMany({
+      where: { bookedById: userId, isBooked: true },
+      orderBy: [
+        { hotelName: 'asc' },
+        { roomType: 'asc' },
+        { createdAt: 'desc' },
+      ],
+      select: {
+        id: true,
+        hotelName: true,
+        roomType: true,
+        price: true,
+        description: true,
+        isReserved: true,
+        isBooked: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
   }

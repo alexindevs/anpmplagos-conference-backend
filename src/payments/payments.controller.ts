@@ -23,9 +23,12 @@ import { AuthUser } from '../auth/auth.service';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
+  InitAdvertSlotPaymentDto,
   InitBoothPaymentDto,
+  InitBrandingSlotPaymentDto,
   InitHotelRoomPaymentDto,
   InitSessionPaymentDto,
+  InitSponsorshipPlanPaymentDto,
 } from './dto';
 import { PaystackService } from './paystack.service';
 
@@ -56,6 +59,17 @@ export class PaymentsController {
     return this.paystackService.initializeSessionPayment(dto, req.user);
   }
 
+  @Post('sponsorship-plan')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Initialize sponsorship plan payment via Paystack' })
+  async initSponsorshipPlanPayment(
+    @Body() dto: InitSponsorshipPlanPaymentDto,
+    @Req() req: Request & { user: AuthUser },
+  ) {
+    return this.paystackService.initializeSponsorshipPlanPayment(dto, req.user);
+  }
+
   @Post('hotel-room')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -70,6 +84,34 @@ export class PaymentsController {
     return this.paystackService.initializeHotelRoomPayment(dto, req.user);
   }
 
+  @Post('advert-slot')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Initialize advert slot payment via Paystack (company only; admin may pass companyId)',
+  })
+  async initAdvertSlotPayment(
+    @Body() dto: InitAdvertSlotPaymentDto,
+    @Req() req: Request & { user: AuthUser },
+  ) {
+    return this.paystackService.initializeAdvertSlotPayment(dto, req.user);
+  }
+
+  @Post('branding-slot')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Initialize branding slot payment via Paystack (company only; admin may pass companyId)',
+  })
+  async initBrandingSlotPayment(
+    @Body() dto: InitBrandingSlotPaymentDto,
+    @Req() req: Request & { user: AuthUser },
+  ) {
+    return this.paystackService.initializeBrandingSlotPayment(dto, req.user);
+  }
+
   @Post('paystack/webhook')
   @HttpCode(200)
   @ApiOperation({ summary: 'Paystack webhook endpoint' })
@@ -77,8 +119,12 @@ export class PaymentsController {
     @Req() req: Request & { rawBody?: Buffer },
     @Headers('x-paystack-signature') signature?: string,
   ) {
-    const rawPayload = req.rawBody?.toString('utf8') ?? JSON.stringify(req.body);
-    const valid = this.paystackService.verifyWebhookSignature(rawPayload, signature);
+    const rawPayload =
+      req.rawBody?.toString('utf8') ?? JSON.stringify(req.body);
+    const valid = this.paystackService.verifyWebhookSignature(
+      rawPayload,
+      signature,
+    );
     if (!valid) {
       throw new UnauthorizedException('Invalid Paystack signature');
     }
@@ -111,9 +157,22 @@ export class PaymentsController {
   @ApiQuery({
     name: 'kind',
     required: false,
-    enum: ['booth', 'masterclass', 'panel', 'hotel_room'],
+    enum: [
+      'booth',
+      'masterclass',
+      'panel',
+      'presentation',
+      'hotel_room',
+      'sponsorship_plan',
+      'advert_slot',
+      'branding_slot',
+    ],
   })
-  @ApiQuery({ name: 'status', required: false, enum: ['pending', 'success', 'failed', 'refunded'] })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['pending', 'success', 'failed', 'refunded'],
+  })
   @ApiQuery({ name: 'reference', required: false })
   async listPayments(
     @Query('page') page?: string,

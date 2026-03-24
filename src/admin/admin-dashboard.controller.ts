@@ -20,7 +20,7 @@ export class AdminDashboardController {
   @ApiOperation({
     summary: 'Get dashboard summary statistics',
     description:
-      'Includes aggregate counts, **`recentRegistrations`** (latest users with display name, optional profile image, human-readable registration type), and **`booths.all`** (every booth slot with **`takenBy`** when assigned to an exhibitor or sponsor).',
+      'Includes aggregate counts, **`recentRegistrations`**, and **`booths.all`** (every booth slot with **`takenBy`** when assigned to a company).',
   })
   @ApiOkResponse({
     description: 'Summary payload',
@@ -40,8 +40,7 @@ export class AdminDashboardController {
           total: 150,
           members: 50,
           attendees: 60,
-          exhibitors: 30,
-          sponsors: 10,
+          companies: 40,
         },
         booths: {
           total: 100,
@@ -60,7 +59,6 @@ export class AdminDashboardController {
               isTaken: true,
               isReserved: false,
               takenBy: {
-                kind: 'exhibitor',
                 id: 'clx…',
                 name: 'Acme Ltd',
                 slug: 'acme-ltd',
@@ -70,10 +68,9 @@ export class AdminDashboardController {
         },
         sessions: { masterclasses: 8, panels: 12 },
         sponsorships: {
-          totalSponsors: 10,
-          activeSponsors: 8,
-          totalPledged: 1500000000,
-          totalActive: 1200000000,
+          companyAccounts: 40,
+          paidPlanRevenueKobo: 500000000,
+          recordedSponsorshipPaidTotalKobo: 480000000,
         },
       },
     },

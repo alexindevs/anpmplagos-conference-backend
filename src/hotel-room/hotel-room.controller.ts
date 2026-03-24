@@ -1,6 +1,10 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { HotelRoomService } from './hotel-room.service';
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { AuthUser } from '../auth/auth.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+
+type AuthedReq = { user: AuthUser };
 
 @ApiTags('hotel-rooms')
 @Controller('api/hotel-rooms')
@@ -15,5 +19,13 @@ export class HotelRoomController {
   })
   listAvailable() {
     return this.hotelRoomService.findAvailable();
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List my booked hotel rooms' })
+  listMyBookedRooms(@Req() req: AuthedReq) {
+    return this.hotelRoomService.listMyBookedRooms(req.user.id);
   }
 }

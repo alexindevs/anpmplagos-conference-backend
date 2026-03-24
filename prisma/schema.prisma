@@ -14,9 +14,8 @@ datasource db {
 enum RegType {
   member
   attendee
-  exhibitor
+  company
   admin
-  sponsor
 }
 
 enum AdminType {
@@ -28,13 +27,6 @@ enum AdminType {
 enum RegistrationStatus {
   pending_payment
   registered
-  cancelled
-}
-
-enum SponsorStatus {
-  pending_pledge
-  pending_payment
-  active
   cancelled
 }
 
@@ -55,7 +47,11 @@ enum PaymentKind {
   booth
   masterclass
   panel
+  presentation
   hotel_room
+  sponsorship_plan
+  advert_slot
+  branding_slot
 }
 
 enum PaymentStatus {
@@ -75,57 +71,57 @@ model User {
   updatedAt          DateTime           @updatedAt
   member             Member?
   attendee           Attendee?
-  exhibitor          Exhibitor?
+  company            Company?
   admin              Admin?
-  sponsor            Sponsor?
   refreshTokens      RefreshToken[]
   payments           Payment[]
-  hotelRoomsBooked   HotelRoom[]      @relation("HotelRoomBooking")
+  hotelRoomsBooked   HotelRoom[]        @relation("HotelRoomBooking")
+  supportTickets     SupportTicket[]
 }
 
 model RefreshToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String   @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([userId])
   @@index([tokenHash])
 }
 
 model Admin {
-  id        String    @id @default(cuid())
-  userId    String    @unique
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  adminType AdminType
-  avatar    String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id                     String                  @id @default(cuid())
+  userId                 String                  @unique
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                   String
+  adminType              AdminType
+  avatar                 String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  supportTicketResponses SupportTicketResponse[]
 }
 
-
 model Member {
-  id                String   @id @default(cuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  slug              String   @unique
-  fullName          String
-  phone             String
-  bio               String?
-  anpmpId           String
-  hasSpouse         Boolean
-  spouseName        String?
-  spouseEmail       String?
-  spousePhone       String?
-  primarySpecialty  String
-  hospitalOrg       String
-  avatar            String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug             String   @unique
+  fullName         String
+  phone            String
+  bio              String?
+  anpmpId          String
+  hasSpouse        Boolean
+  spouseName       String?
+  spouseEmail      String?
+  spousePhone      String?
+  primarySpecialty String
+  hospitalOrg      String
+  avatar           String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Attendee {
@@ -145,79 +141,79 @@ model Attendee {
   updatedAt        DateTime @updatedAt
 }
 
-model Exhibitor {
-  id                  String       @id @default(cuid())
-  userId              String       @unique
-  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  slug                String       @unique
-  companyName         String
-  tagline             String?
-  description         String        @default("")
-  boothPreference     String?
-  /** Display tier for public listings (e.g. grouped with sponsors); set by admin */
-  tier                SponsorTier?
-  website             String?
-  contactEmail        String
-  primaryContactName  String
-  primaryContactPhone String
-  headerImage         String?
-  profileImage        String?
-  /** Incremented when public profile is tracked (see portal) */
-  profileViews        Int          @default(0)
-  /** Optional link for “book hotels for staff” etc. */
-  hotelBookingUrl     String?
-  booth               Booth?       @relation("BoothExhibitor")
-  representatives     ExhibitorRepresentative[]
-  products            ExhibitorProduct[]
-  leads               ExhibitorLead[]
-  payments            Payment[]
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  @@index([tier])
+model Company {
+  id                       String                  @id @default(cuid())
+  userId                   String                  @unique
+  user                     User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug                     String                  @unique
+  companyName              String
+  tagline                  String?
+  description              String                  @default("")
+  boothPreference          String?
+  website                  String?
+  contactEmail             String
+  primaryContactName       String
+  primaryContactPhone      String
+  headerImage              String?
+  logo                     String?
+  profileImage             String?
+  profileViews             Int                     @default(0)
+  sponsorshipPaidTotalKobo Int                     @default(0)
+  highestSponsorshipTier   SponsorTier?
+  booth                    Booth?
+  representatives          CompanyRepresentative[]
+  products                 CompanyProduct[]
+  leads                    CompanyLead[]
+  payments                 Payment[]
+  masterclasses            Masterclass[]           @relation("MasterclassTakenBy")
+  panels                   PanelSession[]          @relation("PanelSessionTakenBy")
+  presentations            Presentation[]          @relation("PresentationTakenBy")
+  advertSlots              AdvertSlot[]            @relation("CompanyAdvertSlots")
+  brandingSlots            BrandingSlot[]          @relation("CompanyBrandingSlots")
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
 }
 
-model ExhibitorProduct {
-  id          String    @id @default(cuid())
-  exhibitorId String
-  exhibitor   Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
-  name        String
-  description String    @default("")
-  imageUrl    String?
-  linkUrl     String?
-  sortOrder   Int       @default(0)
-  /** Incremented when a visitor uses the public WhatsApp inquiry redirect for this product */
-  whatsappClickCount Int @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+model CompanyProduct {
+  id                 String   @id @default(cuid())
+  companyId          String
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name               String
+  description        String   @default("")
+  imageUrl           String?
+  linkUrl            String?
+  sortOrder          Int      @default(0)
+  whatsappClickCount Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  @@index([exhibitorId])
+  @@index([companyId])
 }
 
-model ExhibitorLead {
-  id          String    @id @default(cuid())
-  exhibitorId String
-  exhibitor   Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
-  name        String?
-  email       String?
-  phone       String?
-  message     String?
-  createdAt   DateTime  @default(now())
+model CompanyLead {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String?
+  email     String?
+  phone     String?
+  message   String?
+  createdAt DateTime @default(now())
 
-  @@index([exhibitorId])
+  @@index([companyId])
 }
 
-model ExhibitorRepresentative {
-  id         String   @id @default(cuid())
-  exhibitorId String
-  exhibitor  Exhibitor @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
-  name       String
-  title      String
-  phone      String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+model CompanyRepresentative {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  title     String
+  phone     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([exhibitorId])
+  @@index([companyId])
 }
 
 model HotelRoom {
@@ -240,130 +236,240 @@ model HotelRoom {
 }
 
 model Booth {
-  id                 String     @id @default(cuid())
-  name               String
-  size               String
-  price              Int        // kobo (1 NGN = 100 kobo)
-  /** Slot image (e.g. Cloudinary URL), set at creation via multipart upload or URL */
-  boothImage         String?
-  description        String?
-  /** Display / pricing tier for this booth slot (e.g. zone); set when creating or by admin */
-  tier               SponsorTier?
-  isTaken            Boolean    @default(false)
-  isReserved         Boolean    @default(false)
-  takenById          String?    @unique
-  takenBy            Exhibitor? @relation("BoothExhibitor", fields: [takenById], references: [id], onDelete: SetNull)
-  sponsorTakenById   String?    @unique
-  sponsorTakenBy     Sponsor?   @relation("BoothSponsor", fields: [sponsorTakenById], references: [id], onDelete: SetNull)
-  payments           Payment[]
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  id          String       @id @default(cuid())
+  name        String
+  size        String
+  price       Int // kobo (1 NGN = 100 kobo)
+  boothImage  String?
+  description String?
+  tier        SponsorTier?
+  isTaken     Boolean      @default(false)
+  isReserved  Boolean      @default(false)
+  takenById   String?      @unique
+  takenBy     Company?     @relation(fields: [takenById], references: [id], onDelete: SetNull)
+  payments    Payment[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   @@index([tier])
+}
+
+model AdvertSlot {
+  id          String    @id @default(cuid())
+  title       String
+  image       String
+  price       Int // kobo
+  description String?
+  isTaken     Boolean   @default(false)
+  isReserved  Boolean   @default(false)
+  takenById   String?
+  takenBy     Company?  @relation("CompanyAdvertSlots", fields: [takenById], references: [id], onDelete: SetNull)
+  payments    Payment[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([takenById])
+  @@index([isTaken, isReserved])
+}
+
+model BrandingSlot {
+  id          String    @id @default(cuid())
+  title       String
+  image       String
+  price       Int // kobo
+  description String?
+  isTaken     Boolean   @default(false)
+  isReserved  Boolean   @default(false)
+  takenById   String?
+  takenBy     Company?  @relation("CompanyBrandingSlots", fields: [takenById], references: [id], onDelete: SetNull)
+  payments    Payment[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([takenById])
+  @@index([isTaken, isReserved])
 }
 
 model RegistrationPlan {
   id        String   @id @default(cuid())
   name      String
-  price     Int      // kobo (1 NGN = 100 kobo)
+  price     Int // kobo (1 NGN = 100 kobo)
   perks     String[]
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Sponsor {
-  id                  String        @id @default(cuid())
-  userId              String        @unique
-  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  slug                String        @unique
-  companyName         String
-  tagline             String?
-  description         String        @default("")
-  website             String?
-  contactEmail        String
-  primaryContactName  String
-  primaryContactPhone String
-  sponsorAmount       Int?          // kobo (must be >= 150,000,000 when set)
-  status              SponsorStatus @default(pending_pledge)
-  tier                SponsorTier?
-  logo                String?
-  headerImage         String?
-  boothId             String?       @unique
-  booth               Booth?        @relation("BoothSponsor")
-  masterclasses       Masterclass[]
-  panels              PanelSession[]
-  payments            Payment[]
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+model SponsorshipPlan {
+  id          String      @id @default(cuid())
+  name        String
+  priceInKobo Int
+  tier        SponsorTier
+  perks       String[]
+  isActive    Boolean     @default(true)
+  payments    Payment[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model Masterclass {
   id          String        @id @default(cuid())
   title       String
   description String
-  startTime   DateTime
-  endTime     DateTime
-  location    String
   priceInKobo Int
-  sponsorId   String?
-  sponsor     Sponsor?      @relation(fields: [sponsorId], references: [id], onDelete: SetNull)
+  isTaken     Boolean       @default(false)
+  isReserved  Boolean       @default(false)
+  takenById   String?
+  takenBy     Company?      @relation("MasterclassTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
   status      SessionStatus @default(draft)
   payments    Payment[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  @@index([sponsorId])
+  @@index([takenById])
+  @@index([isTaken, isReserved])
 }
 
 model PanelSession {
   id          String        @id @default(cuid())
   title       String
   description String
-  startTime   DateTime
-  endTime     DateTime
-  location    String
   priceInKobo Int
-  sponsorId   String?
-  sponsor     Sponsor?      @relation(fields: [sponsorId], references: [id], onDelete: SetNull)
+  isTaken     Boolean       @default(false)
+  isReserved  Boolean       @default(false)
+  takenById   String?
+  takenBy     Company?      @relation("PanelSessionTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
   status      SessionStatus @default(draft)
   payments    Payment[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  @@index([sponsorId])
+  @@index([takenById])
+  @@index([isTaken, isReserved])
+}
+
+model Presentation {
+  id          String        @id @default(cuid())
+  title       String
+  description String
+  priceInKobo Int
+  isTaken     Boolean       @default(false)
+  isReserved  Boolean       @default(false)
+  takenById   String?
+  takenBy     Company?      @relation("PresentationTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
+  status      SessionStatus @default(draft)
+  payments    Payment[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([takenById])
+  @@index([isTaken, isReserved])
 }
 
 model Payment {
-  id             String        @id @default(cuid())
-  reference      String        @unique
-  kind           PaymentKind
-  baseAmount     Int
-  amount         Int
-  status         PaymentStatus @default(pending)
-  provider       String
-  providerResponse Json?
-  userId         String
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  exhibitorId    String?
-  exhibitor      Exhibitor?    @relation(fields: [exhibitorId], references: [id], onDelete: SetNull)
-  sponsorId      String?
-  sponsor        Sponsor?      @relation(fields: [sponsorId], references: [id], onDelete: SetNull)
-  boothId        String?
-  booth          Booth?        @relation(fields: [boothId], references: [id], onDelete: SetNull)
-  masterclassId  String?
-  masterclass    Masterclass?  @relation(fields: [masterclassId], references: [id], onDelete: SetNull)
-  panelSessionId String?
-  panelSession   PanelSession? @relation(fields: [panelSessionId], references: [id], onDelete: SetNull)
-  hotelRoomId    String?
-  hotelRoom      HotelRoom?    @relation(fields: [hotelRoomId], references: [id], onDelete: SetNull)
-  paidAt         DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                String           @id @default(cuid())
+  reference         String           @unique
+  kind              PaymentKind
+  baseAmount        Int
+  amount            Int
+  status            PaymentStatus    @default(pending)
+  provider          String
+  providerResponse  Json?
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId         String?
+  company           Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  sponsorshipPlanId String?
+  sponsorshipPlan   SponsorshipPlan? @relation(fields: [sponsorshipPlanId], references: [id], onDelete: SetNull)
+  boothId           String?
+  booth             Booth?           @relation(fields: [boothId], references: [id], onDelete: SetNull)
+  masterclassId     String?
+  masterclass       Masterclass?     @relation(fields: [masterclassId], references: [id], onDelete: SetNull)
+  panelSessionId    String?
+  panelSession      PanelSession?    @relation(fields: [panelSessionId], references: [id], onDelete: SetNull)
+  presentationId    String?
+  presentation      Presentation?    @relation(fields: [presentationId], references: [id], onDelete: SetNull)
+  hotelRoomId       String?
+  hotelRoom         HotelRoom?       @relation(fields: [hotelRoomId], references: [id], onDelete: SetNull)
+  advertSlotId      String?
+  advertSlot        AdvertSlot?      @relation(fields: [advertSlotId], references: [id], onDelete: SetNull)
+  brandingSlotId    String?
+  brandingSlot      BrandingSlot?    @relation(fields: [brandingSlotId], references: [id], onDelete: SetNull)
+  paidAt            DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   @@index([kind, boothId])
   @@index([kind, masterclassId])
   @@index([kind, panelSessionId])
+  @@index([kind, presentationId])
   @@index([kind, hotelRoomId])
+  @@index([kind, advertSlotId])
+  @@index([kind, brandingSlotId])
   @@index([userId])
+  @@index([companyId])
+}
+
+enum SupportTicketCategory {
+  booth
+  masterclass
+  panel
+  presentation
+  hotel_room
+  directory
+  registrations
+  sponsorship
+  marketing_slots
+  company_profile
+  payments
+  other
+}
+
+enum SupportTicketStatus {
+  open
+  answered
+  closed
+}
+
+model SupportTicket {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  category    SupportTicketCategory
+  description String
+
+  /**
+   * Screenshot URLs uploaded to Cloudinary.
+   * Kept as a scalar list for simpler storage/queries.
+   */
+  screenshotUrls String[]
+
+  status SupportTicketStatus @default(open)
+
+  responses SupportTicketResponse[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model SupportTicketResponse {
+  id String @id @default(cuid())
+
+  ticketId String
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  responderAdminId String?
+  responderAdmin   Admin?  @relation(fields: [responderAdminId], references: [id], onDelete: SetNull)
+
+  responseText String
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
 }
