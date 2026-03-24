@@ -13,7 +13,6 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
-  
   // Swagger API documentation
   const config = new DocumentBuilder()
     .setTitle('ANPMP Conference Portal API')
