@@ -119,6 +119,8 @@ export class CompanyService {
       });
     }
 
+    await this.boothService.applyBoothTierToCompany(companyId, booth.tier);
+
     return this.findOneAdmin(companyId);
   }
 

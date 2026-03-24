@@ -11,8 +11,6 @@ const REG_TYPE_LABELS: Record<RegType, string> = {
   attendee: 'Attendee',
   company: 'Company',
   admin: 'Administrator',
-  speaker: 'Speaker',
-  special_guest: 'Special guest',
 };
 
 const recentUserSelect = {
@@ -61,9 +59,6 @@ export class AdminDashboardService {
         return user.company?.companyName ?? user.email;
       case 'admin':
         return user.admin?.name ?? user.email;
-      case 'speaker':
-      case 'special_guest':
-        return user.email;
       default:
         return user.email;
     }
@@ -79,9 +74,6 @@ export class AdminDashboardService {
         return user.company?.logo ?? user.company?.profileImage ?? null;
       case 'admin':
         return user.admin?.avatar ?? null;
-      case 'speaker':
-      case 'special_guest':
-        return null;
       default:
         return null;
     }

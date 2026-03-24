@@ -190,7 +190,7 @@ export class BoothService {
       type Occupant = {
         companyName: string;
         slug: string;
-        effectiveDisplayTier: SponsorTier | null;
+        effectiveDisplayTier: SponsorTier;
       };
 
       let occupiedBy: Occupant | null = null;
@@ -234,13 +234,31 @@ export class BoothService {
       throw new Error('Booth is reserved');
     }
 
-    return this.prisma.booth.update({
+    const updated = await this.prisma.booth.update({
       where: { id: boothId },
       data: {
         isTaken: true,
         takenById: companyId,
       },
       include: { takenBy: true },
+    });
+    await this.applyBoothTierToCompany(companyId, updated.tier);
+    return updated;
+  }
+
+  /**
+   * When a booth has a zone tier, the exhibitor's stored tier becomes that value (see paystack / admin assign).
+   */
+  async applyBoothTierToCompany(
+    companyId: string,
+    boothTier: SponsorTier | null | undefined,
+  ): Promise<void> {
+    if (boothTier == null) {
+      return;
+    }
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { highestSponsorshipTier: boothTier },
     });
   }
 

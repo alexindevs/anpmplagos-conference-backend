@@ -22,7 +22,7 @@ export class AdminRegistrationsController {
   @Get('summary')
   @ApiOperation({
     summary:
-      'Registration counts: members, attendees, companies, speakers, special guests, and total non-admin registrations',
+      'Registration counts: members, attendees, companies, speaker profiles, special guest profiles, and total non-admin user accounts',
   })
   getSummary() {
     return this.adminRegistrations.getSummary();
@@ -31,7 +31,7 @@ export class AdminRegistrationsController {
   @Get()
   @ApiOperation({
     summary:
-      'Paginated list of all non-admin registrations (member, attendee, company, speaker, special_guest); profile URLs use FRONTEND_URL',
+      'Paginated list of all non-admin user accounts (member, attendee, company); profile URLs use FRONTEND_URL',
   })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })

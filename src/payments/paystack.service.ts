@@ -13,6 +13,7 @@ import {
   Prisma,
   RegistrationStatus,
   SessionStatus,
+  SponsorTier,
 } from '@prisma/client';
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { AuthUser } from '../auth/auth.service';
@@ -25,7 +26,8 @@ import {
   InitSessionPaymentDto,
   InitSponsorshipPlanPaymentDto,
 } from './dto';
-import { maxTier } from '../company/company-tier.util';
+import { tierRank } from '../company/company-tier.util';
+import { BoothService } from '../booth/booth.service';
 
 type PaystackInitializeResponse = {
   status: boolean;
@@ -66,6 +68,7 @@ export class PaystackService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly boothService: BoothService,
   ) {
     this.paystackSecretKey = this.config.get<string>('PAYSTACK_SECRET_KEY', '');
     this.paystackBaseUrl = this.config.get<string>(
@@ -1093,6 +1096,7 @@ export class PaystackService {
           },
         });
       }
+      await this.boothService.applyBoothTierToCompany(company.id, booth.tier);
       return;
     }
 
@@ -1257,13 +1261,17 @@ export class PaystackService {
         return;
       }
 
-      const nextTier = maxTier(company.highestSponsorshipTier, plan.tier);
+      const currentTier =
+        company.highestSponsorshipTier ?? SponsorTier.gold;
+      const companyData: Prisma.CompanyUpdateInput = {
+        sponsorshipPaidTotalKobo: { increment: plan.priceInKobo },
+      };
+      if (tierRank(plan.tier) > tierRank(currentTier)) {
+        companyData.highestSponsorshipTier = plan.tier;
+      }
       await this.prisma.company.update({
         where: { id: company.id },
-        data: {
-          sponsorshipPaidTotalKobo: { increment: plan.priceInKobo },
-          ...(nextTier != null ? { highestSponsorshipTier: nextTier } : {}),
-        },
+        data: companyData,
       });
       return;
     }

@@ -202,6 +202,7 @@ export class RegistrationService {
           headerImage: imagePaths?.headerImage,
           profileImage: imagePaths?.profileImage,
           logo: imagePaths?.logo,
+          highestSponsorshipTier: 'gold',
         },
       });
 

@@ -13,3 +13,14 @@ export function buildPublicProfileUrl(
   const base = frontendUrl.replace(/\/$/, '');
   return `${base}/${regTypeToUrlSegment(regType)}/${slug}`;
 }
+
+/** Matches typical frontend routes alongside public API `/api/speakers` and `/api/special-guests`. */
+export function buildConferenceProfileUrl(
+  frontendUrl: string,
+  kind: 'speaker' | 'special_guest',
+  slug: string,
+): string {
+  const base = frontendUrl.replace(/\/$/, '');
+  const segment = kind === 'speaker' ? 'speakers' : 'special-guests';
+  return `${base}/${segment}/${slug}`;
+}

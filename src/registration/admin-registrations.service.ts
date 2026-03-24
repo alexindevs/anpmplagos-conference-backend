@@ -10,7 +10,7 @@ export type AdminRegistrationSummary = {
   companies: number;
   speakers: number;
   specialGuests: number;
-  /** All non-admin accounts (includes member, attendee, company, speaker, special_guest, and any future non-admin types). */
+  /** All non-admin user accounts (member, attendee, company, and any future registrant types). */
   totalRegistrations: number;
 };
 
@@ -22,7 +22,7 @@ export type AdminRegistrationListItem = {
   type: RegType;
   registeredAt: string;
   status: string;
-  /** Public directory URL when a slug exists; `null` for types without a profile slug (e.g. speaker / special_guest until modeled). */
+  /** Public directory URL when a slug exists; `null` if related profile row is missing. */
   profileUrl: string | null;
 };
 
@@ -69,8 +69,10 @@ export class AdminRegistrationsService {
       this.prisma.member.count(),
       this.prisma.attendee.count(),
       this.prisma.company.count(),
-      this.prisma.user.count({ where: { regType: 'speaker' } }),
-      this.prisma.user.count({ where: { regType: 'special_guest' } }),
+      this.prisma.conferenceProfile.count({ where: { kind: 'speaker' } }),
+      this.prisma.conferenceProfile.count({
+        where: { kind: 'special_guest' },
+      }),
       this.prisma.user.count({ where: { regType: { not: 'admin' } } }),
     ]);
 
@@ -154,14 +156,6 @@ export class AdminRegistrationsService {
             'company',
             user.company.slug,
           ),
-        };
-      case 'speaker':
-      case 'special_guest':
-        return {
-          ...base,
-          name: user.email,
-          profileImage: null,
-          profileUrl: null,
         };
       default:
         return {

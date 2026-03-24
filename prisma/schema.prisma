@@ -17,8 +17,16 @@ enum RegType {
   attendee
   company
   admin
+}
+
+enum ConferenceProfileKind {
   speaker
   special_guest
+}
+
+enum ConferenceProfileHighlightType {
+  keynote
+  featured
 }
 
 enum AdminType {
@@ -162,7 +170,7 @@ model Company {
   profileImage             String?
   profileViews             Int                     @default(0)
   sponsorshipPaidTotalKobo Int                     @default(0)
-  highestSponsorshipTier   SponsorTier?
+  highestSponsorshipTier   SponsorTier?           @default(gold)
   booth                    Booth?
   representatives          CompanyRepresentative[]
   products                 CompanyProduct[]
@@ -421,6 +429,29 @@ model GalleryItem {
   updatedAt DateTime @updatedAt
 
   @@index([createdAt(sort: Desc)])
+}
+
+model ConferenceProfile {
+  id             String                       @id @default(cuid())
+  kind           ConferenceProfileKind
+  slug           String
+  name           String
+  profilePicture String
+  role           String
+  qualifications String
+  byline         String
+  highlightType  ConferenceProfileHighlightType
+  description    String
+  websiteLink    String?
+  facebookLink   String?
+  xLink          String?
+  instagramLink  String?
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+
+  @@unique([kind, slug])
+  @@index([kind, highlightType])
+  @@index([kind, name])
 }
 
 enum SupportTicketCategory {
