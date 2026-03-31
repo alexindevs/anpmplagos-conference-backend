@@ -55,6 +55,7 @@ enum SessionStatus {
 }
 
 enum PaymentKind {
+  registration
   booth
   masterclass
   panel
@@ -70,6 +71,11 @@ enum PaymentStatus {
   success
   failed
   refunded
+}
+
+enum EventPassType {
+  conference
+  hotel
 }
 
 model User {
@@ -88,6 +94,7 @@ model User {
   payments           Payment[]
   hotelRoomsBooked   HotelRoom[]        @relation("HotelRoomBooking")
   supportTickets     SupportTicket[]
+  eventPasses        EventPass[]
 }
 
 model RefreshToken {
@@ -167,10 +174,9 @@ model Company {
   primaryContactPhone      String
   headerImage              String?
   logo                     String?
-  profileImage             String?
   profileViews             Int                     @default(0)
   sponsorshipPaidTotalKobo Int                     @default(0)
-  highestSponsorshipTier   SponsorTier?           @default(gold)
+  highestSponsorshipTier   SponsorTier?           @default(silver)
   booth                    Booth?
   representatives          CompanyRepresentative[]
   products                 CompanyProduct[]
@@ -516,4 +522,18 @@ model SupportTicketResponse {
   createdAt DateTime @default(now())
 
   @@index([ticketId, createdAt])
+}
+
+model EventPass {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      EventPassType
+  qrCodeUrl String
+  viewCount Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([userId, type])
+  @@index([userId])
 }

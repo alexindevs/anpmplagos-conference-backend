@@ -73,9 +73,4 @@ export class UpdateAdminCompanyDto {
   @IsString()
   @IsOptional()
   headerImage?: string;
-
-  @ApiPropertyOptional()
-  @IsString()
-  @IsOptional()
-  profileImage?: string;
 }

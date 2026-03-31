@@ -22,6 +22,8 @@ import {
 } from '@nestjs/swagger';
 import type { AuthUser } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { TierGateGuard, MinTier } from '../auth/guards/tier-gate.guard';
+import { SponsorTier } from '@prisma/client';
 import type { Express } from 'express';
 import { CompanyService } from './company.service';
 import { CreateCompanyProductMultipartDto } from './dto/create-company-product-multipart.dto';
@@ -176,14 +178,15 @@ export class CompanyPortalController {
   }
 
   @Post('me/products')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TierGateGuard)
+  @MinTier(SponsorTier.gold)
   @UseInterceptors(FileInterceptor('productImage'))
   @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Add a product (multipart/form-data)',
+    summary: 'Add a product (multipart/form-data) - Gold tier and above',
     description:
-      'Send fields as form data. Optional file field **`productImage`** (JPEG/PNG, max 5MB) is uploaded to Cloudinary and stored as `imageUrl`. You may omit the file and optionally set **`imageUrl`** to an existing URL instead.',
+      'Send fields as form data. Optional file field **`productImage`** (JPEG/PNG, max 5MB) is uploaded to Cloudinary and stored as `imageUrl`. You may omit the file and optionally set **`imageUrl`** to an existing URL instead. Requires Gold tier or higher.',
   })
   @ApiBody({
     description:
@@ -213,6 +216,10 @@ export class CompanyPortalController {
   @ApiResponse({
     status: 400,
     description: 'Validation error or invalid productImage (type/size)',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Insufficient tier - requires Gold tier or higher',
   })
   addProduct(
     @Req() req: AuthedReq,

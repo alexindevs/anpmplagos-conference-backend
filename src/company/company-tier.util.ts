@@ -21,7 +21,7 @@ export function maxTier(
 }
 
 /**
- * Exhibitors default to **gold** when no higher source applies.
+ * Exhibitors default to **silver** when no higher source applies.
  * Stored `highestSponsorshipTier` is updated on booth purchase (booth tier when set)
  * and when sponsorship exceeds the current tier; we still max with live `booth.tier` for consistency.
  */
@@ -31,8 +31,8 @@ export function effectiveDisplayTier(company: {
 }): SponsorTier {
   return (
     maxTier(
-      company.highestSponsorshipTier ?? SponsorTier.gold,
+      company.highestSponsorshipTier ?? SponsorTier.silver,
       company.booth?.tier ?? null,
-    ) ?? SponsorTier.gold
+    ) ?? SponsorTier.silver
   );
 }

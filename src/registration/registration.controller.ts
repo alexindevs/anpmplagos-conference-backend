@@ -1,19 +1,29 @@
 import {
   Body,
   Controller,
+  Get,
   Post,
   Req,
   Res,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import {
   DEFAULT_ACCESS_COOKIE_MAX_AGE_SECONDS,
   getDefaultRefreshCookieMaxAgeSeconds,
   setAuthCookies,
 } from '../auth/auth-cookies';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { AuthUser } from '../auth/auth.service';
 import { RegistrationService } from './registration.service';
 import { CreateRegistrationDto } from './dto';
 import { ParseAndValidateRegistrationPipe } from './parse-and-validate-registration.pipe';
@@ -134,7 +144,6 @@ export class RegistrationController {
         { name: 'avatar', maxCount: 1 },
         { name: 'logo', maxCount: 1 },
         { name: 'headerImage', maxCount: 1 },
-        { name: 'profileImage', maxCount: 1 },
       ],
       {
         limits: { fileSize: 5 * 1024 * 1024 },
@@ -179,5 +188,58 @@ export class RegistrationController {
     }
 
     return result;
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get current user registration details and payment status',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns registration details and payment status',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        status: { type: 'string', example: 'registered' },
+        user: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            email: { type: 'string' },
+            regType: { type: 'string', example: 'member' },
+            registrationStatus: { type: 'string', example: 'registered' },
+          },
+        },
+        member: {
+          type: 'object',
+          properties: {
+            fullName: { type: 'string' },
+            phone: { type: 'string' },
+            anpmpId: { type: 'string' },
+          },
+        },
+        attendee: {
+          type: 'object',
+          properties: {
+            fullName: { type: 'string' },
+            phone: { type: 'string' },
+          },
+        },
+        payment: {
+          type: 'object',
+          properties: {
+            reference: { type: 'string' },
+            status: { type: 'string', example: 'success' },
+            paidAt: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  })
+  async getMe(@Req() req: Request & { user: AuthUser }) {
+    return this.registrationService.findMe(req.user.id);
   }
 }

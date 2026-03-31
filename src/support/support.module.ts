@@ -1,4 +1,4 @@
-import { Logger, Module } from '@nestjs/common';
+import { Logger, Module, forwardRef } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { AuthModule } from '../auth/auth.module';
@@ -16,7 +16,7 @@ const supportMailerLogger = new Logger('SupportMailer');
 
 @Module({
   imports: [
-    AuthModule,
+    forwardRef(() => AuthModule),
     CloudinaryModule,
     MailerModule.forRootAsync({
       inject: [ConfigService],

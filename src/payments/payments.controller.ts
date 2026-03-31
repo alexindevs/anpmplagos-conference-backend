@@ -27,6 +27,7 @@ import {
   InitBoothPaymentDto,
   InitBrandingSlotPaymentDto,
   InitHotelRoomPaymentDto,
+  InitRegistrationPaymentDto,
   InitSessionPaymentDto,
   InitSponsorshipPlanPaymentDto,
 } from './dto';
@@ -36,6 +37,17 @@ import { PaystackService } from './paystack.service';
 @Controller('api/payments')
 export class PaymentsController {
   constructor(private readonly paystackService: PaystackService) {}
+
+  @Post('registration')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Initialize registration payment via Paystack' })
+  async initRegistrationPayment(
+    @Body() dto: InitRegistrationPaymentDto,
+    @Req() req: Request & { user: AuthUser },
+  ) {
+    return this.paystackService.initializeRegistrationPayment(dto, req.user);
+  }
 
   @Post('booth')
   @UseGuards(JwtAuthGuard)
@@ -158,6 +170,7 @@ export class PaymentsController {
     name: 'kind',
     required: false,
     enum: [
+      'registration',
       'booth',
       'masterclass',
       'panel',
@@ -173,7 +186,6 @@ export class PaymentsController {
     required: false,
     enum: ['pending', 'success', 'failed', 'refunded'],
   })
-  @ApiQuery({ name: 'reference', required: false })
   async listPayments(
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,

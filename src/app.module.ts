@@ -22,6 +22,7 @@ import { MarketingSlotsModule } from './marketing-slots/marketing-slots.module';
 import { SupportModule } from './support/support.module';
 import { GalleryModule } from './gallery/gallery.module';
 import { ConferenceProfileModule } from './conference-profile/conference-profile.module';
+import { EventPassModule } from './event-pass/event-pass.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { ConferenceProfileModule } from './conference-profile/conference-profile
     SupportModule,
     GalleryModule,
     ConferenceProfileModule,
+    EventPassModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

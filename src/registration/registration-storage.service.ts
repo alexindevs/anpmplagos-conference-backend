@@ -15,13 +15,11 @@ export class RegistrationStorageService {
   ): Promise<{
     avatar?: string;
     headerImage?: string;
-    profileImage?: string;
     logo?: string;
   }> {
     const result: {
       avatar?: string;
       headerImage?: string;
-      profileImage?: string;
       logo?: string;
     } = {};
     const folder = `registrations/${userId}`;
@@ -45,18 +43,6 @@ export class RegistrationStorageService {
           file.buffer,
           folder,
           'header',
-          file.mimetype,
-        );
-      }
-    }
-
-    if (files.profileImage?.[0]) {
-      const file = files.profileImage[0];
-      if (ALLOWED_MIMES.includes(file.mimetype) && file.size <= MAX_FILE_SIZE) {
-        result.profileImage = await this.cloudinary.uploadBuffer(
-          file.buffer,
-          folder,
-          'profile',
           file.mimetype,
         );
       }

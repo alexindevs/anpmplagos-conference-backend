@@ -1,9 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { CompanyController } from './company.controller';
 import { CompanyPortalController } from './company-portal.controller';
 import { CompanyAdminController } from './company-admin.controller';
+import { AdminSponsorshipPlanController } from './admin-sponsorship-plan.controller';
 import { CompanyService } from './company.service';
 import { AuthModule } from '../auth/auth.module';
 import { BoothModule } from '../booth/booth.module';
@@ -11,7 +12,7 @@ import { MarketingSlotsModule } from '../marketing-slots/marketing-slots.module'
 
 @Module({
   imports: [
-    AuthModule,
+    forwardRef(() => AuthModule),
     BoothModule,
     MarketingSlotsModule,
     MulterModule.register({
@@ -23,6 +24,7 @@ import { MarketingSlotsModule } from '../marketing-slots/marketing-slots.module'
     CompanyPortalController,
     CompanyController,
     CompanyAdminController,
+    AdminSponsorshipPlanController,
   ],
   providers: [CompanyService],
   exports: [CompanyService],

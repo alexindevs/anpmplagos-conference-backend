@@ -45,7 +45,6 @@ type UserListRow = {
   company: {
     companyName: string;
     logo: string | null;
-    profileImage: string | null;
     slug: string;
   } | null;
 };
@@ -149,8 +148,7 @@ export class AdminRegistrationsService {
         return {
           ...base,
           name: user.company.companyName,
-          profileImage:
-            user.company.logo ?? user.company.profileImage ?? null,
+          profileImage: user.company.logo,
           profileUrl: buildPublicProfileUrl(
             frontendUrl,
             'company',
@@ -203,7 +201,6 @@ export class AdminRegistrationsService {
             select: {
               companyName: true,
               logo: true,
-              profileImage: true,
               slug: true,
             },
           },

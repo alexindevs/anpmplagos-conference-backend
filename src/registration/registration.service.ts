@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
@@ -106,6 +107,100 @@ export class RegistrationService {
     });
   }
 
+  async findMe(userId: string) {
+    type UserWithRelations = {
+      id: string;
+      createdAt: Date;
+      updatedAt: Date;
+      email: string;
+      password: string;
+      regType: RegType;
+      registrationStatus: RegistrationStatus;
+      member: {
+        id: string;
+        fullName: string;
+        phone: string;
+        anpmpId: string;
+        primarySpecialty: string;
+        hospitalOrg: string;
+        avatar: string;
+      } | null;
+      attendee: {
+        id: string;
+        fullName: string;
+        phone: string;
+      } | null;
+      payments: Array<{
+        reference: string;
+        status: string;
+        paidAt: Date | null;
+      }>;
+    };
+
+    const user = (await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        member: {
+          select: { id: true, fullName: true, phone: true, anpmpId: true, primarySpecialty: true, hospitalOrg: true, avatar: true },
+        },
+        attendee: {
+          select: { id: true, fullName: true, phone: true },
+        },
+        payments: {
+          where: { kind: 'registration' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { reference: true, status: true, paidAt: true },
+        },
+      },
+    })) as UserWithRelations | null;
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const payment = user.payments[0];
+
+    const response: Record<string, unknown> = {
+      id: user.id,
+      status: this.mapRegistrationStatus(user.registrationStatus),
+      user: {
+        id: user.id,
+        email: user.email,
+        regType: user.regType,
+        registrationStatus: user.registrationStatus,
+      },
+    };
+
+    if (user.member) {
+      response.member = {
+        fullName: user.member.fullName,
+        phone: user.member.phone,
+        anpmpId: user.member.anpmpId,
+        primarySpecialty: user.member.primarySpecialty,
+        hospitalOrg: user.member.hospitalOrg,
+        avatar: user.member.avatar,
+      };
+    }
+
+    if (user.attendee) {
+      response.attendee = {
+        fullName: user.attendee.fullName,
+        phone: user.attendee.phone,
+      };
+    }
+
+    if (payment) {
+      response.payment = {
+        reference: payment.reference,
+        status: payment.status,
+        paidAt: payment.paidAt,
+      };
+    }
+
+    return response;
+  }
+
   async create(
     dto: CreateRegistrationDto,
     files?: RegistrationFiles,
@@ -200,7 +295,6 @@ export class RegistrationService {
           primaryContactName: companyDto.primaryContactName!,
           primaryContactPhone: companyDto.primaryContactPhone!,
           headerImage: imagePaths?.headerImage,
-          profileImage: imagePaths?.profileImage,
           logo: imagePaths?.logo,
           highestSponsorshipTier: 'gold',
         },

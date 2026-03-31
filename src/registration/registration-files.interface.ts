@@ -9,6 +9,5 @@ export interface RegistrationFile {
 export interface RegistrationFiles {
   avatar?: RegistrationFile[];
   headerImage?: RegistrationFile[];
-  profileImage?: RegistrationFile[];
   logo?: RegistrationFile[];
 }

@@ -6,7 +6,6 @@ import {
   NotFoundException,
   Param,
   Post,
-  Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -87,13 +86,12 @@ export class CompanyController {
   async redirectWhatsappProductInquiry(
     @Param('slug') slug: string,
     @Param('productId') productId: string,
-    @Res() res: Response,
   ) {
     const url = await this.companyService.getWhatsappProductInquiryRedirectUrl(
       slug,
       productId,
     );
-    return res.redirect(302, url);
+    return { redirectUrl: url };
   }
 
   @Get('public/:slug')

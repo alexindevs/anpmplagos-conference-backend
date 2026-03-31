@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import type { SignOptions } from 'jsonwebtoken';
@@ -6,7 +6,9 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AdminGuard } from './guards/admin.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { TierGateGuard } from './guards/tier-gate.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { CompanyModule } from '../company/company.module';
 
 @Module({
   imports: [
@@ -21,9 +23,10 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       }),
       inject: [ConfigService],
     }),
+    forwardRef(() => CompanyModule),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, AdminGuard],
-  exports: [AuthService, JwtAuthGuard, AdminGuard],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard, AdminGuard, TierGateGuard],
+  exports: [AuthService, JwtAuthGuard, AdminGuard, TierGateGuard],
 })
 export class AuthModule {}

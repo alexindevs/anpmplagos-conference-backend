@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { AuthModule } from '../auth/auth.module';
@@ -11,7 +11,7 @@ import { BrandingSlotService } from './branding-slot.service';
 
 @Module({
   imports: [
-    AuthModule,
+    forwardRef(() => AuthModule),
     MulterModule.register({
       storage: memoryStorage(),
       limits: { fileSize: 5 * 1024 * 1024 },

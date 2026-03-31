@@ -23,6 +23,7 @@ import {
   InitBoothPaymentDto,
   InitBrandingSlotPaymentDto,
   InitHotelRoomPaymentDto,
+  InitRegistrationPaymentDto,
   InitSessionPaymentDto,
   InitSponsorshipPlanPaymentDto,
 } from './dto';
@@ -112,19 +113,46 @@ export class PaystackService {
   }
 
   /**
+   * Non-admin callers must not send `userId`; the paying user is always `AuthUser.id` (JWT).
+   * Admins may send `userId` to pay on behalf of another user.
+   */
+  private resolveUserIdForPayment(
+    bodyUserId: string | undefined,
+    authUser: AuthUser,
+  ): string {
+    const trimmed = bodyUserId?.trim();
+    if (authUser.regType === 'admin') {
+      if (trimmed) {
+        return trimmed;
+      }
+      return authUser.id;
+    }
+    if (trimmed && trimmed !== authUser.id) {
+      throw new ForbiddenException(
+        'You can only initialize registration payment for your own account',
+      );
+    }
+    return authUser.id;
+  }
+
+  /**
    * Frontend URL Paystack redirects to after checkout — one per payment flow.
    * Uses `PAYSTACK_CALLBACK_URL_*` when set, else `PAYSTACK_CALLBACK_URL`.
+   * For hotel_room, supports regType-specific URLs.
    */
   private callbackUrlFor(
     flow:
+      | 'registration'
       | 'booth'
       | 'session'
       | 'hotel_room'
       | 'sponsorship_plan'
       | 'advert_slot'
       | 'branding_slot',
+    regType?: 'member' | 'attendee' | 'company' | 'admin',
   ): string {
     const envKeys = {
+      registration: 'PAYSTACK_CALLBACK_URL_REGISTRATION',
       booth: 'PAYSTACK_CALLBACK_URL_BOOTH',
       session: 'PAYSTACK_CALLBACK_URL_SESSION',
       hotel_room: 'PAYSTACK_CALLBACK_URL_HOTEL_ROOM',
@@ -132,6 +160,16 @@ export class PaystackService {
       advert_slot: 'PAYSTACK_CALLBACK_URL_ADVERT_SLOT',
       branding_slot: 'PAYSTACK_CALLBACK_URL_BRANDING_SLOT',
     } as const;
+
+    // For hotel_room, check regType-specific URLs first (skip admin)
+    if (flow === 'hotel_room' && regType && regType !== 'admin') {
+      const regTypeKey = `PAYSTACK_CALLBACK_URL_HOTEL_ROOM_${regType.toUpperCase()}`;
+      const regTypeUrl = this.config.get<string>(regTypeKey, '')?.trim();
+      if (regTypeUrl) {
+        return regTypeUrl;
+      }
+    }
+
     const specific = this.config.get<string>(envKeys[flow], '')?.trim();
     if (specific) {
       return specific;
@@ -604,7 +642,7 @@ export class PaystackService {
       email: user.email,
       amount,
       reference,
-      callbackUrl: this.callbackUrlFor('hotel_room'),
+      callbackUrl: this.callbackUrlFor('hotel_room', user.regType),
       metadata: {
         kind: 'hotel_room',
         hotelRoomId: room.id,
@@ -865,6 +903,104 @@ export class PaystackService {
     };
   }
 
+  async initializeRegistrationPayment(
+    dto: InitRegistrationPaymentDto,
+    authUser: AuthUser,
+  ): Promise<{
+    reference: string;
+    authorizationUrl: string;
+    accessCode: string;
+    amount: number;
+    baseAmount: number;
+  }> {
+    const userId = this.resolveUserIdForPayment(dto.userId, authUser);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { member: true, attendee: true },
+    });
+    if (!user) {
+      throw new NotFoundException(`User ${userId} not found`);
+    }
+
+    // Only allow registration payments for members and attendees
+    if (user.regType !== 'member' && user.regType !== 'attendee') {
+      throw new ForbiddenException(
+        'Registration payments are only for members and attendees',
+      );
+    }
+
+    // Check if user is already registered
+    if (user.registrationStatus === 'registered') {
+      throw new BadRequestException('User is already registered');
+    }
+
+    // Check for existing pending registration payment
+    const existingPending = await this.prisma.payment.findFirst({
+      where: {
+        kind: 'registration',
+        userId: user.id,
+        status: 'pending',
+      },
+      select: { id: true },
+    });
+    if (existingPending) {
+      throw new BadRequestException(
+        'There is already a pending payment for this registration',
+      );
+    }
+
+    // Determine base amount based on registration type
+    let baseAmount: number;
+    if (user.regType === 'member') {
+      baseAmount = 4000000; // ₦40,000 in kobo
+    } else {
+      baseAmount = 5500000; // ₦55,000 in kobo
+    }
+
+    const amount = this.calculateGrossAmountForNet(baseAmount);
+    const reference = this.generateReference('registration');
+
+    const paystack = await this.callPaystackInitialize({
+      email: user.email,
+      amount,
+      reference,
+      callbackUrl: this.callbackUrlFor('registration'),
+      metadata: {
+        kind: 'registration',
+        userId: user.id,
+        regType: user.regType,
+        baseAmount,
+      },
+    });
+
+    await this.prisma.payment.create({
+      data: {
+        reference,
+        kind: 'registration',
+        baseAmount,
+        amount,
+        status: 'pending',
+        provider: 'paystack',
+        providerResponse: paystack as unknown as Prisma.InputJsonValue,
+        userId: user.id,
+      },
+    });
+
+    const paystackData = paystack.data;
+    if (!paystackData) {
+      throw new BadRequestException('Invalid Paystack response');
+    }
+
+    return {
+      reference,
+      authorizationUrl: paystackData.authorization_url,
+      accessCode: paystackData.access_code,
+      amount,
+      baseAmount,
+    };
+  }
+
   async initializeSponsorshipPlanPayment(
     dto: InitSponsorshipPlanPaymentDto,
     authUser: AuthUser,
@@ -1048,9 +1184,29 @@ export class PaystackService {
         sponsorshipPlan: true,
         advertSlot: true,
         brandingSlot: true,
+        user: true,
       },
     });
     if (!payment) {
+      return;
+    }
+
+    if (payment.kind === 'registration') {
+      const user = payment.user;
+      if (!user) {
+        await this.markPaymentFailed(
+          payment,
+          paystackData,
+          'Missing user',
+        );
+        return;
+      }
+
+      // Update user registration status to registered
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { registrationStatus: 'registered' },
+      });
       return;
     }
 
@@ -1262,7 +1418,7 @@ export class PaystackService {
       }
 
       const currentTier =
-        company.highestSponsorshipTier ?? SponsorTier.gold;
+        company.highestSponsorshipTier ?? SponsorTier.silver;
       const companyData: Prisma.CompanyUpdateInput = {
         sponsorshipPaidTotalKobo: { increment: plan.priceInKobo },
       };
@@ -1500,7 +1656,7 @@ export class PaystackService {
       throw new BadRequestException(data.message ?? 'Failed to verify payment');
     }
 
-    const paystackData = data.data as Record<string, unknown>;
+    const paystackData = data.data as unknown as Record<string, unknown>;
     if (data.data.status === 'success') {
       await this.handleChargeSuccess(paystackData);
     } else {

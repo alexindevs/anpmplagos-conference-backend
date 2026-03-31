@@ -246,7 +246,6 @@ export class CompanyService {
       'sponsorshipPaidTotalKobo',
       'logo',
       'headerImage',
-      'profileImage',
     ] as const;
     for (const k of keys) {
       if (dto[k] !== undefined) {
@@ -277,12 +276,105 @@ export class CompanyService {
     });
   }
 
+  async createSponsorshipPlan(dto: {
+    name: string;
+    priceInKobo: number;
+    tier: SponsorTier;
+    perks?: string[];
+    isActive?: boolean;
+  }) {
+    return this.prisma.sponsorshipPlan.create({
+      data: {
+        name: dto.name,
+        priceInKobo: dto.priceInKobo,
+        tier: dto.tier,
+        perks: dto.perks ?? [],
+        isActive: dto.isActive ?? true,
+      },
+    });
+  }
+
+  async listAllSponsorshipPlans(filters?: { tier?: SponsorTier; isActive?: boolean }) {
+    const where: Prisma.SponsorshipPlanWhereInput = {};
+    if (filters?.tier) {
+      where.tier = filters.tier;
+    }
+    if (filters?.isActive !== undefined) {
+      where.isActive = filters.isActive;
+    }
+
+    return this.prisma.sponsorshipPlan.findMany({
+      where,
+      orderBy: { priceInKobo: 'asc' },
+    });
+  }
+
+  async findSponsorshipPlanById(id: string) {
+    return this.prisma.sponsorshipPlan.findUnique({
+      where: { id },
+    });
+  }
+
+  async updateSponsorshipPlan(
+    id: string,
+    dto: {
+      name?: string;
+      priceInKobo?: number;
+      tier?: SponsorTier;
+      perks?: string[];
+      isActive?: boolean;
+    },
+  ) {
+    const plan = await this.prisma.sponsorshipPlan.findUnique({
+      where: { id },
+    });
+    if (!plan) {
+      throw new NotFoundException(`Sponsorship plan ${id} not found`);
+    }
+
+    return this.prisma.sponsorshipPlan.update({
+      where: { id },
+      data: {
+        name: dto.name,
+        priceInKobo: dto.priceInKobo,
+        tier: dto.tier,
+        perks: dto.perks,
+        isActive: dto.isActive,
+      },
+    });
+  }
+
+  async deleteSponsorshipPlan(id: string) {
+    const plan = await this.prisma.sponsorshipPlan.findUnique({
+      where: { id },
+      include: { payments: { take: 1 } },
+    });
+    if (!plan) {
+      throw new NotFoundException(`Sponsorship plan ${id} not found`);
+    }
+    if (plan.payments.length > 0) {
+      throw new BadRequestException(
+        'Cannot delete plan with existing payments. Deactivate it instead.',
+      );
+    }
+
+    await this.prisma.sponsorshipPlan.delete({
+      where: { id },
+    });
+
+    return { deleted: true };
+  }
+
   async findPublic(filters?: { tier?: SponsorTier }) {
     const rows = await this.prisma.company.findMany({
       where: {
         user: {
           registrationStatus: 'registered',
         },
+        OR: [
+          { booth: { is: { id: { not: undefined } } } },
+          { sponsorshipPaidTotalKobo: { gt: 0 } },
+        ],
       },
       select: {
         id: true,
@@ -292,7 +384,6 @@ export class CompanyService {
         description: true,
         website: true,
         headerImage: true,
-        profileImage: true,
         logo: true,
         highestSponsorshipTier: true,
         sponsorshipPaidTotalKobo: true,
@@ -410,7 +501,6 @@ export class CompanyService {
       highestSponsorshipTier: company.highestSponsorshipTier,
       logo: company.logo,
       headerImage: company.headerImage,
-      profileImage: company.profileImage,
       booth: company.booth,
       representatives: company.representatives,
       products: company.products,
@@ -460,7 +550,6 @@ export class CompanyService {
       'primaryContactName',
       'primaryContactPhone',
       'headerImage',
-      'profileImage',
       'logo',
     ] as const;
     for (const k of keys) {
@@ -495,9 +584,9 @@ export class CompanyService {
       throw new NotFoundException('Company not found');
     }
 
-    const [totalLeads, pendingBoothPayment, whatsappClicksSum] =
+    const [totalMembers, pendingBoothPayment, whatsappClicksSum] =
       await Promise.all([
-        this.prisma.companyLead.count({ where: { companyId } }),
+        this.prisma.user.count({ where: { regType: 'member' } }),
         this.prisma.payment.findFirst({
           where: {
             companyId,
@@ -519,7 +608,7 @@ export class CompanyService {
 
     const views = company.profileViews;
     const inquiryRatePercent =
-      views > 0 ? Math.round((totalLeads / views) * 10000) / 100 : 0;
+      views > 0 ? Math.round((totalMembers / views) * 10000) / 100 : 0;
 
     let boothStatus: 'none' | 'pending_payment' | 'assigned';
     if (company.booth) {
@@ -536,7 +625,7 @@ export class CompanyService {
       effectiveDisplayTier: effectiveDisplayTier(company),
       stats: {
         profileViews: views,
-        totalLeads,
+        totalMembers,
         inquiryRatePercent,
         whatsappProductClicks: whatsappClicksSum._sum.whatsappClickCount ?? 0,
       },
@@ -627,7 +716,7 @@ export class CompanyService {
   async createProductMultipart(
     companyId: string,
     dto: CreateCompanyProductMultipartDto,
-    file?: Express.Multer.File | undefined,
+    file?: Express.Multer.File,
   ) {
     let imageUrl: string | undefined = dto.imageUrl;
 

@@ -20,7 +20,7 @@ const recentUserSelect = {
   createdAt: true,
   member: { select: { fullName: true, avatar: true } },
   attendee: { select: { fullName: true, avatar: true } },
-  company: { select: { companyName: true, logo: true, profileImage: true } },
+  company: { select: { companyName: true, logo: true } },
   admin: { select: { name: true, avatar: true } },
 } satisfies Prisma.UserSelect;
 
@@ -71,7 +71,7 @@ export class AdminDashboardService {
       case 'attendee':
         return user.attendee?.avatar ?? null;
       case 'company':
-        return user.company?.logo ?? user.company?.profileImage ?? null;
+        return user.company?.logo ?? null;
       case 'admin':
         return user.admin?.avatar ?? null;
       default:

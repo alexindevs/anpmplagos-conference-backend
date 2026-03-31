@@ -54,9 +54,4 @@ export class UpdateCompanyProfileDto {
   @IsOptional()
   @IsString()
   logo?: string;
-
-  @ApiPropertyOptional({ description: 'Profile / secondary image URL' })
-  @IsOptional()
-  @IsString()
-  profileImage?: string;
 }
