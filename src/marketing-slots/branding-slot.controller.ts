@@ -1,4 +1,10 @@
-import { Controller, ForbiddenException, Get, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { AuthUser } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -14,8 +20,7 @@ export class BrandingSlotController {
   @Get('available')
   @ApiOperation({
     summary: 'List branding slots available for purchase',
-    description:
-      'Slots where **`isTaken`** and **`isReserved`** are false.',
+    description: 'Slots where **`isTaken`** and **`isReserved`** are false.',
   })
   listAvailable() {
     return this.brandingSlotService.findAvailable();

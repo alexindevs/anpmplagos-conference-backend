@@ -576,6 +576,7 @@ export class PaystackService {
   }> {
     const user = await this.prisma.user.findUnique({
       where: { id: authUser.id },
+      include: { company: true },
     });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -584,6 +585,24 @@ export class PaystackService {
       throw new BadRequestException(
         'Complete registration before booking a hotel room',
       );
+    }
+
+    // Companies must have paid for a booth or sponsorship plan before booking hotels
+    if (authUser.regType === 'company' && user.company) {
+      const hasBoothOrSponsorshipPayment = await this.prisma.payment.findFirst({
+        where: {
+          companyId: user.company.id,
+          kind: { in: ['booth', 'sponsorship_plan'] },
+          status: 'success',
+        },
+        select: { id: true },
+      });
+
+      if (!hasBoothOrSponsorshipPayment) {
+        throw new BadRequestException(
+          'Companies must purchase a booth or sponsorship plan before booking hotel rooms',
+        );
+      }
     }
 
     /** Company accounts may hold multiple room slots; others max one (booked + pending). */
@@ -725,7 +744,9 @@ export class PaystackService {
       throw new BadRequestException('This advert slot is already taken');
     }
     if (slot.isTaken && slot.takenById === company.id) {
-      throw new BadRequestException('Your company already owns this advert slot');
+      throw new BadRequestException(
+        'Your company already owns this advert slot',
+      );
     }
 
     const existingPending = await this.prisma.payment.findFirst({
@@ -1194,11 +1215,7 @@ export class PaystackService {
     if (payment.kind === 'registration') {
       const user = payment.user;
       if (!user) {
-        await this.markPaymentFailed(
-          payment,
-          paystackData,
-          'Missing user',
-        );
+        await this.markPaymentFailed(payment, paystackData, 'Missing user');
         return;
       }
 
@@ -1417,8 +1434,7 @@ export class PaystackService {
         return;
       }
 
-      const currentTier =
-        company.highestSponsorshipTier ?? SponsorTier.silver;
+      const currentTier = company.highestSponsorshipTier ?? SponsorTier.silver;
       const companyData: Prisma.CompanyUpdateInput = {
         sponsorshipPaidTotalKobo: { increment: plan.priceInKobo },
       };

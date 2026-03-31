@@ -75,10 +75,7 @@ export class CompanyAdminController {
   @ApiOperation({
     summary: 'Assign advert slot to company (admin, no Paystack)',
   })
-  assignAdvertSlot(
-    @Param('id') id: string,
-    @Body() dto: AssignAdvertSlotDto,
-  ) {
+  assignAdvertSlot(@Param('id') id: string, @Body() dto: AssignAdvertSlotDto) {
     return this.companyService.assignAdvertSlotAdmin(id, dto.advertSlotId);
   }
 

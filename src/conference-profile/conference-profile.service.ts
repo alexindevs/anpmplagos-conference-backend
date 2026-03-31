@@ -234,11 +234,7 @@ export class ConferenceProfileService {
     if (dto.name !== undefined) {
       data.name = dto.name;
       if (dto.name !== current.name) {
-        data.slug = await this.generateUniqueSlugExcluding(
-          kind,
-          dto.name,
-          id,
-        );
+        data.slug = await this.generateUniqueSlugExcluding(kind, dto.name, id);
       }
     }
     if (dto.role !== undefined) data.role = dto.role;

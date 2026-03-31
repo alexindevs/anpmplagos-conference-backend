@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -42,7 +51,9 @@ export class AdminSupportTicketController {
   }
 
   @Post('tickets/:id/respond')
-  @ApiOperation({ summary: 'Respond to a support ticket (admin) and email the user' })
+  @ApiOperation({
+    summary: 'Respond to a support ticket (admin) and email the user',
+  })
   @ApiParam({ name: 'id', example: 'clxyz123abc' })
   @ApiBody({ type: RespondSupportTicketDto })
   @ApiResponse({ status: 201, description: 'Response saved and user emailed' })
@@ -54,4 +65,3 @@ export class AdminSupportTicketController {
     return this.supportTickets.respondToTicket(req.user, id, dto);
   }
 }
-

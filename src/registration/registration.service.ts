@@ -141,7 +141,15 @@ export class RegistrationService {
       where: { id: userId },
       include: {
         member: {
-          select: { id: true, fullName: true, phone: true, anpmpId: true, primarySpecialty: true, hospitalOrg: true, avatar: true },
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            anpmpId: true,
+            primarySpecialty: true,
+            hospitalOrg: true,
+            avatar: true,
+          },
         },
         attendee: {
           select: { id: true, fullName: true, phone: true },

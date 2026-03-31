@@ -70,10 +70,7 @@ export class AdminBrandingSlotController {
     @Body() dto: CreateBrandingSlotMultipartDto,
     @UploadedFile() brandingSlotImage: Express.Multer.File | undefined,
   ) {
-    return this.brandingSlotService.createFromMultipart(
-      dto,
-      brandingSlotImage,
-    );
+    return this.brandingSlotService.createFromMultipart(dto, brandingSlotImage);
   }
 
   @Patch(':id/reserve')

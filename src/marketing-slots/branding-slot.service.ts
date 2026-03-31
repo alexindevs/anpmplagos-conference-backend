@@ -213,9 +213,7 @@ export class BrandingSlotService {
       throw new NotFoundException(`Branding slot ${brandingSlotId} not found`);
     }
     if (slot.isReserved) {
-      throw new BadRequestException(
-        'Slot is reserved and cannot be assigned',
-      );
+      throw new BadRequestException('Slot is reserved and cannot be assigned');
     }
     if (slot.isTaken && slot.takenById !== companyId) {
       throw new BadRequestException('Slot is already taken by another company');

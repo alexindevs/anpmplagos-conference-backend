@@ -37,7 +37,11 @@ export class AdminSponsorshipPlanController {
 
   @Get()
   @ApiOperation({ summary: 'List all sponsorship plans (admin view)' })
-  @ApiQuery({ name: 'tier', required: false, enum: ['silver', 'gold', 'platinum', 'headliner'] })
+  @ApiQuery({
+    name: 'tier',
+    required: false,
+    enum: ['silver', 'gold', 'platinum', 'headliner'],
+  })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
   async findAll(
     @Query('tier') tier?: SponsorTier,
@@ -65,15 +69,14 @@ export class AdminSponsorshipPlanController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a sponsorship plan' })
-  async update(
-    @Param('id') id: string,
-    @Body() dto: UpdateSponsorshipPlanDto,
-  ) {
+  async update(@Param('id') id: string, @Body() dto: UpdateSponsorshipPlanDto) {
     return this.companyService.updateSponsorshipPlan(id, dto);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a sponsorship plan (only if no payments exist)' })
+  @ApiOperation({
+    summary: 'Delete a sponsorship plan (only if no payments exist)',
+  })
   async remove(@Param('id') id: string) {
     return this.companyService.deleteSponsorshipPlan(id);
   }

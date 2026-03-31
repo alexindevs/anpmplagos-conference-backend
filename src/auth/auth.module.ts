@@ -26,7 +26,13 @@ import { CompanyModule } from '../company/company.module';
     forwardRef(() => CompanyModule),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, AdminGuard, TierGateGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    JwtAuthGuard,
+    AdminGuard,
+    TierGateGuard,
+  ],
   exports: [AuthService, JwtAuthGuard, AdminGuard, TierGateGuard],
 })
 export class AuthModule {}

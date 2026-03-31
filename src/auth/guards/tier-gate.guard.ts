@@ -12,7 +12,11 @@ import { tierRank } from '../../company/company-tier.util';
 
 export const MIN_TIER_KEY = 'minTier';
 export const MinTier = (tier: SponsorTier) => {
-  return (target: any, propertyKey?: string, descriptor?: PropertyDescriptor) => {
+  return (
+    target: any,
+    propertyKey?: string,
+    descriptor?: PropertyDescriptor,
+  ) => {
     Reflect.defineMetadata(MIN_TIER_KEY, tier, descriptor?.value || target);
   };
 };

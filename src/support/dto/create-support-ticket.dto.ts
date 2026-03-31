@@ -25,4 +25,3 @@ export class CreateSupportTicketDto {
   @MaxLength(5000)
   description: string;
 }
-

@@ -15,10 +15,7 @@ import type { Express } from 'express';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.service';
-import {
-  CreateSupportTicketDto,
-  RespondSupportTicketDto,
-} from './dto';
+import { CreateSupportTicketDto, RespondSupportTicketDto } from './dto';
 import { SupportEmailService } from './support-email.service';
 
 type CreateTicketFiles = {
@@ -264,7 +261,12 @@ export class SupportTicketService {
     userId: string,
     page: number,
     pageSize: number,
-  ): Promise<{ items: SupportTicketListItem[]; page: number; pageSize: number; total: number }> {
+  ): Promise<{
+    items: SupportTicketListItem[];
+    page: number;
+    pageSize: number;
+    total: number;
+  }> {
     const where = { userId };
     const skip = (page - 1) * pageSize;
 
@@ -523,4 +525,3 @@ export class SupportTicketService {
     return { id: ticketId, status: 'answered' };
   }
 }
-

@@ -33,7 +33,8 @@ export class AdminGalleryController {
 
   @Get()
   @ApiOperation({
-    summary: 'List all gallery images (admin; same payload as public GET /api/gallery)',
+    summary:
+      'List all gallery images (admin; same payload as public GET /api/gallery)',
   })
   @ApiResponse({ status: 200, description: 'Newest first' })
   list() {
@@ -42,7 +43,8 @@ export class AdminGalleryController {
 
   @Get(':id')
   @ApiOperation({
-    summary: 'Get one gallery item (admin; same as public GET /api/gallery/:id)',
+    summary:
+      'Get one gallery item (admin; same as public GET /api/gallery/:id)',
   })
   @ApiResponse({ status: 404, description: 'Not found' })
   findOne(@Param('id') id: string) {

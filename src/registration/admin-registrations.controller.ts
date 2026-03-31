@@ -15,9 +15,7 @@ import { AdminRegistrationsListQueryDto } from './dto/admin-registrations-list-q
 @UseGuards(JwtAuthGuard, AdminGuard)
 @ApiBearerAuth()
 export class AdminRegistrationsController {
-  constructor(
-    private readonly adminRegistrations: AdminRegistrationsService,
-  ) {}
+  constructor(private readonly adminRegistrations: AdminRegistrationsService) {}
 
   @Get('summary')
   @ApiOperation({

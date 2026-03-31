@@ -18,4 +18,3 @@ export class ListSupportTicketsQueryDto {
   @Max(100)
   pageSize?: number;
 }
-

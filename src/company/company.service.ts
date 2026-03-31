@@ -294,7 +294,10 @@ export class CompanyService {
     });
   }
 
-  async listAllSponsorshipPlans(filters?: { tier?: SponsorTier; isActive?: boolean }) {
+  async listAllSponsorshipPlans(filters?: {
+    tier?: SponsorTier;
+    isActive?: boolean;
+  }) {
     const where: Prisma.SponsorshipPlanWhereInput = {};
     if (filters?.tier) {
       where.tier = filters.tier;

@@ -96,11 +96,7 @@ export class SupportTicketController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a ticket I created' })
   @ApiParam({ name: 'id', example: 'clxyz123abc' })
-  getMyTicket(
-    @Req() req: { user: AuthUser },
-    @Param('id') id: string,
-  ) {
+  getMyTicket(@Req() req: { user: AuthUser }, @Param('id') id: string) {
     return this.supportTickets.getMyTicket(req.user.id, id);
   }
 }
-

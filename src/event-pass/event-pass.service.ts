@@ -202,10 +202,7 @@ export class EventPassService {
       name = user.company.companyName;
     }
 
-    const hotelMap = new Map<
-      string,
-      Array<{ roomType: string }>
-    >();
+    const hotelMap = new Map<string, Array<{ roomType: string }>>();
 
     for (const room of user.hotelRoomsBooked) {
       if (!hotelMap.has(room.hotelName)) {
@@ -214,12 +211,10 @@ export class EventPassService {
       hotelMap.get(room.hotelName)!.push({ roomType: room.roomType });
     }
 
-    const hotels = Array.from(hotelMap.entries()).map(
-      ([hotelName, rooms]) => ({
-        hotelName,
-        rooms,
-      }),
-    );
+    const hotels = Array.from(hotelMap.entries()).map(([hotelName, rooms]) => ({
+      hotelName,
+      rooms,
+    }));
 
     return {
       name,

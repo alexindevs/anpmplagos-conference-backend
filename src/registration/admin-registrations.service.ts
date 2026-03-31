@@ -213,8 +213,7 @@ export class AdminRegistrationsService {
       this.mapUserToListItem(u as UserListRow, frontendUrl),
     );
 
-    const totalPages =
-      total === 0 ? 0 : Math.ceil(total / safeLimit);
+    const totalPages = total === 0 ? 0 : Math.ceil(total / safeLimit);
 
     return {
       items,

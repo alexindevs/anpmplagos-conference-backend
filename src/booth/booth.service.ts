@@ -7,7 +7,7 @@ import { Booth, Prisma, RegistrationStatus, SponsorTier } from '@prisma/client';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateBoothMultipartDto } from './dto/create-booth-multipart.dto';
-import { effectiveDisplayTier } from '../company/company-tier.util';
+import { effectiveDisplayTier, tierRank } from '../company/company-tier.util';
 
 const BOOTH_IMAGE_MAX_BYTES = 5 * 1024 * 1024; // 5MB
 
@@ -122,7 +122,7 @@ export class BoothService {
    */
   async createFromMultipart(
     dto: CreateBoothMultipartDto,
-    file?: Express.Multer.File | undefined,
+    file?: Express.Multer.File,
   ): Promise<Booth> {
     let boothImage: string | undefined = dto.boothImageUrl?.trim() || undefined;
 
@@ -247,7 +247,7 @@ export class BoothService {
   }
 
   /**
-   * When a booth has a zone tier, the exhibitor's stored tier becomes that value (see paystack / admin assign).
+   * When a booth has it's own tier, the exhibitor's stored tier becomes that value
    */
   async applyBoothTierToCompany(
     companyId: string,
@@ -256,10 +256,24 @@ export class BoothService {
     if (boothTier == null) {
       return;
     }
-    await this.prisma.company.update({
+
+    const company = await this.prisma.company.findUnique({
       where: { id: companyId },
-      data: { highestSponsorshipTier: boothTier },
+      select: { highestSponsorshipTier: true },
     });
+
+    if (!company) {
+      return;
+    }
+
+    const currentTier = company.highestSponsorshipTier ?? SponsorTier.silver;
+
+    if (tierRank(boothTier) > tierRank(currentTier)) {
+      await this.prisma.company.update({
+        where: { id: companyId },
+        data: { highestSponsorshipTier: boothTier },
+      });
+    }
   }
 
   async release(boothId: string): Promise<Booth> {
