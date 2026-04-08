@@ -304,7 +304,7 @@ export class RegistrationService {
           primaryContactPhone: companyDto.primaryContactPhone!,
           headerImage: imagePaths?.headerImage,
           logo: imagePaths?.logo,
-          highestSponsorshipTier: 'gold',
+          highestSponsorshipTier: 'silver',
         },
       });
 
