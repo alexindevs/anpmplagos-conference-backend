@@ -28,9 +28,17 @@ import { RegistrationService } from './registration.service';
 import { CreateRegistrationDto } from './dto';
 import { ParseAndValidateRegistrationPipe } from './parse-and-validate-registration.pipe';
 import { RegistrationFiles } from './registration-files.interface';
+import {
+  HttpCacheInterceptor,
+  CacheInvalidationInterceptor,
+  CacheKey,
+  CacheTTL,
+  InvalidateCache,
+} from '../cache';
 
 @ApiTags('registrations')
 @Controller('api/registrations')
+@UseInterceptors(HttpCacheInterceptor, CacheInvalidationInterceptor)
 export class RegistrationController {
   constructor(private readonly registrationService: RegistrationService) {}
 
@@ -138,6 +146,9 @@ export class RegistrationController {
   @ApiResponse({ status: 400, description: 'Validation error' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
   @ApiResponse({ status: 422, description: 'ANPMP ID invalid (member only)' })
+  @InvalidateCache({
+    patterns: ['admin:dashboard:*', 'public:partners:*'],
+  })
   @UseInterceptors(
     FileFieldsInterceptor(
       [
@@ -159,8 +170,8 @@ export class RegistrationController {
     ),
   )
   async create(
-    // `Object` so global ValidationPipe skips; real validation runs in ParseAndValidateRegistrationPipe
-    @Body(ParseAndValidateRegistrationPipe) dto: Object,
+    // `object` so global ValidationPipe skips; real validation runs in ParseAndValidateRegistrationPipe
+    @Body(ParseAndValidateRegistrationPipe) dto: object,
     @Req() req: { files?: RegistrationFiles },
     @Res({ passthrough: true }) res: Response,
   ) {
@@ -239,6 +250,8 @@ export class RegistrationController {
       },
     },
   })
+  @CacheKey('registration:me:{userId}')
+  @CacheTTL(120)
   async getMe(@Req() req: Request & { user: AuthUser }) {
     return this.registrationService.findMe(req.user.id);
   }

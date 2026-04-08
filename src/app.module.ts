@@ -23,6 +23,7 @@ import { SupportModule } from './support/support.module';
 import { GalleryModule } from './gallery/gallery.module';
 import { ConferenceProfileModule } from './conference-profile/conference-profile.module';
 import { EventPassModule } from './event-pass/event-pass.module';
+import { CacheModule } from './cache/cache.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { EventPassModule } from './event-pass/event-pass.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    CacheModule,
     PrismaModule,
     CloudinaryModule,
     DirectoryModule,

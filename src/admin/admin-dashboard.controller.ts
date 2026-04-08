@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, UseGuards, UseInterceptors } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -8,11 +8,13 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { AdminDashboardService } from './admin-dashboard.service';
+import { HttpCacheInterceptor, CacheKey, CacheTTL } from '../cache';
 
 @ApiTags('Admin - Dashboard')
 @Controller('api/admin/dashboard')
 @UseGuards(JwtAuthGuard, AdminGuard)
 @ApiBearerAuth()
+@UseInterceptors(HttpCacheInterceptor)
 export class AdminDashboardController {
   constructor(private readonly adminDashboard: AdminDashboardService) {}
 
@@ -75,6 +77,8 @@ export class AdminDashboardController {
       },
     },
   })
+  @CacheKey('admin:dashboard:summary')
+  @CacheTTL(60)
   getSummary() {
     return this.adminDashboard.getSummary();
   }

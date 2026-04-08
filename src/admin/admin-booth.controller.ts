@@ -22,11 +22,19 @@ import { BoothService } from '../booth/booth.service';
 import { CreateBoothMultipartDto } from '../booth/dto/create-booth-multipart.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
+import {
+  HttpCacheInterceptor,
+  CacheInvalidationInterceptor,
+  CacheKey,
+  CacheTTL,
+  InvalidateCache,
+} from '../cache';
 
 @ApiTags('admin')
 @Controller('api/admin/booths')
 @UseGuards(JwtAuthGuard, AdminGuard)
 @ApiBearerAuth()
+@UseInterceptors(HttpCacheInterceptor, CacheInvalidationInterceptor)
 export class AdminBoothController {
   constructor(private readonly boothService: BoothService) {}
 
@@ -40,6 +48,8 @@ export class AdminBoothController {
     status: 200,
     description: 'All booths (sorted by tier, then name)',
   })
+  @CacheKey('admin:booths:list')
+  @CacheTTL(60)
   listAll() {
     return this.boothService.findAllForAdmin();
   }
@@ -92,6 +102,9 @@ export class AdminBoothController {
   })
   @ApiResponse({ status: 201, description: 'Booth created' })
   @ApiResponse({ status: 400, description: 'Validation error' })
+  @InvalidateCache({
+    patterns: ['booths:*', 'admin:booths:*', 'admin:dashboard:*'],
+  })
   create(
     @Body() dto: CreateBoothMultipartDto,
     @UploadedFile() boothImage: Express.Multer.File | undefined,
@@ -103,6 +116,9 @@ export class AdminBoothController {
   @ApiOperation({ summary: 'Reserve a booth (admin only)' })
   @ApiResponse({ status: 200, description: 'Booth reserved' })
   @ApiResponse({ status: 404, description: 'Booth not found' })
+  @InvalidateCache({
+    patterns: ['booths:*', 'admin:booths:*', 'admin:dashboard:*'],
+  })
   reserve(@Param('id') id: string) {
     return this.boothService.reserve(id);
   }
@@ -111,6 +127,9 @@ export class AdminBoothController {
   @ApiOperation({ summary: 'Unreserve a booth (admin only)' })
   @ApiResponse({ status: 200, description: 'Booth unreserved' })
   @ApiResponse({ status: 404, description: 'Booth not found' })
+  @InvalidateCache({
+    patterns: ['booths:*', 'admin:booths:*', 'admin:dashboard:*'],
+  })
   unreserve(@Param('id') id: string) {
     return this.boothService.unreserve(id);
   }

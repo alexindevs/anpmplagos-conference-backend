@@ -23,11 +23,19 @@ import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateGalleryItemMultipartDto } from './dto/create-gallery-item-multipart.dto';
 import { GalleryService } from './gallery.service';
+import {
+  HttpCacheInterceptor,
+  CacheInvalidationInterceptor,
+  CacheKey,
+  CacheTTL,
+  InvalidateCache,
+} from '../cache';
 
 @ApiTags('Admin - Gallery')
 @Controller('api/admin/gallery')
 @UseGuards(JwtAuthGuard, AdminGuard)
 @ApiBearerAuth()
+@UseInterceptors(HttpCacheInterceptor, CacheInvalidationInterceptor)
 export class AdminGalleryController {
   constructor(private readonly gallery: GalleryService) {}
 
@@ -37,6 +45,8 @@ export class AdminGalleryController {
       'List all gallery images (admin; same payload as public GET /api/gallery)',
   })
   @ApiResponse({ status: 200, description: 'Newest first' })
+  @CacheKey('admin:gallery:list')
+  @CacheTTL(120)
   list() {
     return this.gallery.findAllPublic();
   }
@@ -81,6 +91,9 @@ export class AdminGalleryController {
     status: 400,
     description: 'Missing file, wrong type, or too large',
   })
+  @InvalidateCache({
+    patterns: ['gallery:*', 'admin:gallery:*'],
+  })
   create(
     @Body() dto: CreateGalleryItemMultipartDto,
     @UploadedFile() image: Express.Multer.File | undefined,
@@ -92,6 +105,9 @@ export class AdminGalleryController {
   @ApiOperation({ summary: 'Delete a gallery item (admin)' })
   @ApiResponse({ status: 200, description: 'Deleted' })
   @ApiResponse({ status: 404, description: 'Not found' })
+  @InvalidateCache({
+    patterns: ['gallery:*', 'admin:gallery:*'],
+  })
   remove(@Param('id') id: string) {
     return this.gallery.remove(id);
   }

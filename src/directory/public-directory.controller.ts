@@ -1,7 +1,8 @@
-import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, UseInterceptors } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SponsorTier } from '@prisma/client';
 import { CompanyService } from '../company/company.service';
+import { HttpCacheInterceptor, CacheKey, CacheTTL } from '../cache';
 
 function parseTierQuery(raw: string | undefined): SponsorTier {
   if (raw == null || raw === '') {
@@ -16,6 +17,8 @@ function parseTierQuery(raw: string | undefined): SponsorTier {
 
 @ApiTags('Public directory')
 @Controller('api/public')
+@UseInterceptors(HttpCacheInterceptor)
+@CacheTTL(300)
 export class PublicDirectoryController {
   constructor(private readonly companyService: CompanyService) {}
 
@@ -32,6 +35,7 @@ export class PublicDirectoryController {
     required: true,
     example: SponsorTier.gold,
   })
+  @CacheKey('public:partners:tier:{query.tier}')
   async partnersByTier(@Query('tier') tierRaw: string) {
     const tier = parseTierQuery(tierRaw);
     const companies = await this.companyService.findPublic({ tier });

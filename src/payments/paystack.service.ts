@@ -29,6 +29,7 @@ import {
 } from './dto';
 import { tierRank } from '../company/company-tier.util';
 import { BoothService } from '../booth/booth.service';
+import { CacheService } from '../cache/cache.service';
 
 type PaystackInitializeResponse = {
   status: boolean;
@@ -70,6 +71,7 @@ export class PaystackService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly boothService: BoothService,
+    private readonly cacheService: CacheService,
   ) {
     this.paystackSecretKey = this.config.get<string>('PAYSTACK_SECRET_KEY', '');
     this.paystackBaseUrl = this.config.get<string>(
@@ -1175,6 +1177,7 @@ export class PaystackService {
   private async handleChargeFailed(
     data: Record<string, unknown>,
   ): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     const reference = String(data.reference ?? '');
     if (!reference) {
       return;
@@ -1224,6 +1227,14 @@ export class PaystackService {
         where: { id: user.id },
         data: { registrationStatus: 'registered' },
       });
+
+      // Invalidate registration and admin caches
+      await Promise.all([
+        this.cacheService.delPattern('registration:me:*'),
+        this.cacheService.delPattern('admin:dashboard:*'),
+        this.cacheService.delPattern('public:partners:*'),
+      ]);
+
       return;
     }
 
@@ -1270,6 +1281,15 @@ export class PaystackService {
         });
       }
       await this.boothService.applyBoothTierToCompany(company.id, booth.tier);
+
+      // Invalidate booth and company caches
+      await Promise.all([
+        this.cacheService.delPattern('booths:*'),
+        this.cacheService.delPattern('admin:booths:*'),
+        this.cacheService.delPattern('admin:dashboard:*'),
+        this.cacheService.delPattern('public:partners:*'),
+      ]);
+
       return;
     }
 
@@ -1317,6 +1337,10 @@ export class PaystackService {
           },
         });
       }
+
+      // Invalidate session caches
+      await this.cacheService.delPattern('admin:dashboard:*');
+
       return;
     }
 
@@ -1364,6 +1388,10 @@ export class PaystackService {
           },
         });
       }
+
+      // Invalidate session caches
+      await this.cacheService.delPattern('admin:dashboard:*');
+
       return;
     }
 
@@ -1486,6 +1514,13 @@ export class PaystackService {
           },
         });
       }
+
+      // Invalidate hotel room caches
+      await Promise.all([
+        this.cacheService.delPattern('hotel-rooms:*'),
+        this.cacheService.delPattern('admin:dashboard:*'),
+      ]);
+
       return;
     }
 

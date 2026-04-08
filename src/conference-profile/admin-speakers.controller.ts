@@ -25,6 +25,13 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ConferenceProfileService } from './conference-profile.service';
 import { CreateConferenceProfileMultipartDto } from './dto/create-conference-profile-multipart.dto';
 import { UpdateConferenceProfileMultipartDto } from './dto/update-conference-profile-multipart.dto';
+import {
+  HttpCacheInterceptor,
+  CacheInvalidationInterceptor,
+  CacheKey,
+  CacheTTL,
+  InvalidateCache,
+} from '../cache';
 
 const multipartCreateSchema = {
   type: 'object',
@@ -81,6 +88,7 @@ const multipartPatchSchema = {
 @Controller('api/admin/speakers')
 @UseGuards(JwtAuthGuard, AdminGuard)
 @ApiBearerAuth()
+@UseInterceptors(HttpCacheInterceptor, CacheInvalidationInterceptor)
 export class AdminSpeakersController {
   constructor(private readonly profiles: ConferenceProfileService) {}
 
@@ -88,6 +96,8 @@ export class AdminSpeakersController {
   @ApiOperation({
     summary: 'List speaker profiles (admin; same payload as public)',
   })
+  @CacheKey('admin:speakers:list')
+  @CacheTTL(120)
   list() {
     return this.profiles.findAllPublicByKind('speaker');
   }
@@ -115,6 +125,9 @@ export class AdminSpeakersController {
     status: 400,
     description: 'Missing file, wrong type, or validation error',
   })
+  @InvalidateCache({
+    patterns: ['speakers:*', 'admin:speakers:*'],
+  })
   create(
     @Body() dto: CreateConferenceProfileMultipartDto,
     @UploadedFile() image: Express.Multer.File | undefined,
@@ -134,6 +147,9 @@ export class AdminSpeakersController {
   })
   @ApiResponse({ status: 200, description: 'Profile updated' })
   @ApiResponse({ status: 404, description: 'Not found' })
+  @InvalidateCache({
+    patterns: ['speakers:*', 'admin:speakers:*'],
+  })
   update(
     @Param('id') id: string,
     @Body() dto: UpdateConferenceProfileMultipartDto,
@@ -146,6 +162,9 @@ export class AdminSpeakersController {
   @ApiOperation({ summary: 'Delete a speaker profile (admin)' })
   @ApiResponse({ status: 200, description: 'Deleted' })
   @ApiResponse({ status: 404, description: 'Not found' })
+  @InvalidateCache({
+    patterns: ['speakers:*', 'admin:speakers:*'],
+  })
   remove(@Param('id') id: string) {
     return this.profiles.remove(id, 'speaker');
   }
