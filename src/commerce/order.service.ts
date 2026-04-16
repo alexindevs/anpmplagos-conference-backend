@@ -22,6 +22,11 @@ import {
 } from '../marketing-slots/marketing-slot-bundle-guard';
 import { CheckoutOrderDto } from './dto/checkout-order.dto';
 import { koboBigInt, koboNumber } from '../common/kobo';
+import {
+  applyEarlyBirdDiscountToBigIntKobo,
+  cartLineGetsEarlyBirdDiscount,
+  getEarlyBirdDiscountPercent,
+} from '../common/early-bird-discount.util';
 
 type CartItemWithRelations = CartItem & {
   booth: { price: number; name: string } | null;
@@ -338,6 +343,23 @@ export class OrderService {
       this.snapshotForItem(it as CartItemWithRelations),
     );
 
+    const discountPct = getEarlyBirdDiscountPercent();
+    const checkoutLines: OrderLineSnapshotInput[] =
+      discountPct > 0
+        ? lineInputs.map((line) => {
+            if (!cartLineGetsEarlyBirdDiscount(dto.cartKind, line.type)) {
+              return line;
+            }
+            return {
+              ...line,
+              unitBaseAmountKobo: applyEarlyBirdDiscountToBigIntKobo(
+                line.unitBaseAmountKobo,
+                discountPct,
+              ),
+            };
+          })
+        : lineInputs;
+
     if (dto.cartKind === 'conference' && companyId) {
       await this.sponsorshipBundleResolution.assertCheckoutCompatibleWithPlans(
         this.prisma,
@@ -353,7 +375,7 @@ export class OrderService {
       await assertBrandingSlotsNotBundleOnly(this.prisma, brandingIds);
     }
 
-    const baseTotal = lineInputs.reduce(
+    const baseTotal = checkoutLines.reduce(
       (sum, line) =>
         sum + koboNumber(line.unitBaseAmountKobo) * line.quantity,
       0,
@@ -378,18 +400,18 @@ export class OrderService {
         });
 
         await tx.orderItem.createMany({
-          data: lineInputs.map((line) => ({
+          data: checkoutLines.map((line) => ({
             ...line,
             orderId: order.id,
           })),
         });
 
-        await this.placeCheckoutHoldsTx(tx, order.id, lineInputs, expiresAt);
+        await this.placeCheckoutHoldsTx(tx, order.id, checkoutLines, expiresAt);
 
         const sponsorshipResolution =
           await this.sponsorshipBundleResolution.resolveAllForCheckout(tx, {
             orderId: order.id,
-            lineInputs,
+            lineInputs: checkoutLines,
             expiresAt,
           });
 

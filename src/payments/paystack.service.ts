@@ -43,6 +43,11 @@ import {
 } from '../sponsorship/sponsorship-bundle-resolution.service';
 import { koboBigInt, koboNumber } from '../common/kobo';
 import {
+  applyEarlyBirdDiscountToBigIntKobo,
+  applyEarlyBirdDiscountToIntKobo,
+  getEarlyBirdDiscountPercent,
+} from '../common/early-bird-discount.util';
+import {
   assertAdvertSlotsNotBundleOnly,
   assertBrandingSlotsNotBundleOnly,
 } from '../marketing-slots/marketing-slot-bundle-guard';
@@ -480,7 +485,8 @@ export class PaystackService {
       );
     }
 
-    const baseAmount = booth.price;
+    const pct = getEarlyBirdDiscountPercent();
+    const baseAmount = applyEarlyBirdDiscountToIntKobo(booth.price, pct);
     const amount = this.calculateGrossAmountForNet(baseAmount);
     const reference = this.generateReference('booth');
 
@@ -1069,12 +1075,14 @@ export class PaystackService {
     }
 
     // Determine base amount based on registration type
-    let baseAmount: number;
+    let rawBase: number;
     if (user.regType === 'member') {
-      baseAmount = 4000000; // ₦40,000 in kobo
+      rawBase = 4000000; // ₦40,000 in kobo
     } else {
-      baseAmount = 5500000; // ₦55,000 in kobo
+      rawBase = 5500000; // ₦55,000 in kobo
     }
+    const pct = getEarlyBirdDiscountPercent();
+    const baseAmount = applyEarlyBirdDiscountToIntKobo(rawBase, pct);
 
     const amount = this.calculateGrossAmountForNet(baseAmount);
     const reference = this.generateReference('registration');
@@ -1181,7 +1189,10 @@ export class PaystackService {
       },
     );
 
-    const baseAmount = koboNumber(plan.priceInKobo);
+    const pct = getEarlyBirdDiscountPercent();
+    const baseAmount = koboNumber(
+      applyEarlyBirdDiscountToBigIntKobo(plan.priceInKobo, pct),
+    );
     const amount = this.calculateGrossAmountForNet(baseAmount);
     const reference = this.generateReference('sponsorship_plan');
 
@@ -1714,7 +1725,7 @@ export class PaystackService {
 
       const currentTier = company.highestSponsorshipTier ?? SponsorTier.default;
       const companyData: Prisma.CompanyUpdateInput = {
-        sponsorshipPaidTotalKobo: { increment: plan.priceInKobo },
+        sponsorshipPaidTotalKobo: { increment: payment.baseAmount },
       };
       if (tierRank(plan.tier) > tierRank(currentTier)) {
         companyData.highestSponsorshipTier = plan.tier;
