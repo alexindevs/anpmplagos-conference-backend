@@ -110,6 +110,24 @@ export class CreateRegistrationDto {
   @IsString()
   hospitalOrg?: string;
 
+  @ApiProperty({ example: 'Dr', required: false })
+  @ValidateIf((o: RegContext) => o.regType === 'member')
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @ApiProperty({ example: '1 Hospital Road, Lagos', required: false })
+  @ValidateIf((o: RegContext) => o.regType === 'member')
+  @IsString()
+  @IsNotEmpty()
+  organizationAddress?: string;
+
+  @ApiProperty({ example: 'Lagos Zone A', required: false })
+  @ValidateIf((o: RegContext) => o.regType === 'member')
+  @IsString()
+  @IsNotEmpty()
+  zone?: string;
+
   // Attendee only
   @ApiProperty({ example: true, required: false })
   @ValidateIf((o: RegContext) => o.regType === 'attendee')

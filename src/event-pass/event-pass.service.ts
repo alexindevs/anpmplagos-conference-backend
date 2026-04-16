@@ -8,7 +8,22 @@ import { ConfigService } from '@nestjs/config';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import type { EventPassType } from '@prisma/client';
+import {
+  PaymentKind,
+  PaymentStatus,
+  RegistrationStatus,
+  type EventPassType,
+} from '@prisma/client';
+
+const NON_HOTEL_COMMERCE_KINDS: PaymentKind[] = [
+  PaymentKind.booth,
+  PaymentKind.masterclass,
+  PaymentKind.panel,
+  PaymentKind.presentation,
+  PaymentKind.sponsorship_plan,
+  PaymentKind.advert_slot,
+  PaymentKind.branding_slot,
+];
 
 @Injectable()
 export class EventPassService {
@@ -275,15 +290,64 @@ export class EventPassService {
     return result;
   }
 
+  /**
+   * Conference pass purchase eligibility for the signed-in user:
+   * - **Company:** at least one **successful** non-hotel commerce payment (same rules as `getCompanyPassPurchaseEligibility`).
+   * - **Member / attendee:** registration completed (`registrationStatus === registered`), i.e. registration paid.
+   */
+  async getPassPurchaseEligibility(params: {
+    regType: string;
+    userId: string;
+    companyId: string | null | undefined;
+  }): Promise<{ isEligible: boolean }> {
+    if (params.regType === 'company') {
+      if (!params.companyId) {
+        throw new ForbiddenException('Company account required');
+      }
+      return this.getCompanyPassPurchaseEligibility(params.companyId);
+    }
+    if (params.regType === 'member' || params.regType === 'attendee') {
+      const user = await this.prisma.user.findUnique({
+        where: { id: params.userId },
+        select: { registrationStatus: true },
+      });
+      return {
+        isEligible: user?.registrationStatus === RegistrationStatus.registered,
+      };
+    }
+    throw new ForbiddenException(
+      'Company, member, or attendee account required',
+    );
+  }
+
+  /**
+   * Company is eligible for pass flows that require a non-hotel commerce purchase
+   * if it has at least one **successful** payment that is not a hotel room and not a hotel-only cart order.
+   */
+  async getCompanyPassPurchaseEligibility(
+    companyId: string,
+  ): Promise<{ isEligible: boolean }> {
+    const count = await this.prisma.payment.count({
+      where: {
+        companyId,
+        status: PaymentStatus.success,
+        OR: [
+          { kind: { in: NON_HOTEL_COMMERCE_KINDS } },
+          {
+            kind: PaymentKind.order,
+            order: { cartKind: 'conference' },
+          },
+        ],
+      },
+    });
+    return { isEligible: count > 0 };
+  }
+
   private async checkConferenceEligibility(userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        company: {
-          include: {
-            booth: true,
-          },
-        },
+        company: { select: { id: true } },
       },
     });
 
@@ -298,13 +362,15 @@ export class EventPassService {
         );
       }
     } else if (user.regType === 'company') {
-      const hasBooth = user.company?.booth !== null;
-      const hasSponsorshipPayment =
-        Number(user.company?.sponsorshipPaidTotalKobo ?? 0) > 0;
-
-      if (!hasBooth && !hasSponsorshipPayment) {
+      const companyId = user.company?.id;
+      if (!companyId) {
+        throw new BadRequestException('Company profile not found');
+      }
+      const { isEligible } =
+        await this.getCompanyPassPurchaseEligibility(companyId);
+      if (!isEligible) {
         throw new BadRequestException(
-          'Company must have a booth or sponsorship plan to generate a conference pass',
+          'Company must complete a qualifying purchase on the platform (any conference commerce except hotel) before generating a conference pass',
         );
       }
     } else {

@@ -33,6 +33,7 @@ export class AdvertSlotService {
       where: {
         isTaken: false,
         isReserved: false,
+        sponsorshipPlanLinks: { none: {} },
         NOT: {
           AND: [
             { checkoutHoldExpiresAt: { gt: now } },

@@ -9,12 +9,14 @@ import { CompanyService } from './company.service';
 import { AuthModule } from '../auth/auth.module';
 import { BoothModule } from '../booth/booth.module';
 import { MarketingSlotsModule } from '../marketing-slots/marketing-slots.module';
+import { MemberSheetsModule } from '../member-sheets/member-sheets.module';
 
 @Module({
   imports: [
     forwardRef(() => AuthModule),
     BoothModule,
     MarketingSlotsModule,
+    MemberSheetsModule,
     MulterModule.register({
       storage: memoryStorage(),
       limits: { fileSize: 5 * 1024 * 1024 },

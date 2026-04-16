@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, ValidateIf } from 'class-validator';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  ValidateIf,
+} from 'class-validator';
 import { CreateRegistrationBaseDto } from './create-registration.dto';
 
 export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
@@ -23,6 +29,15 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
   })
   @IsString()
   phone: string;
+
+  @ApiProperty({
+    example: 'Dr',
+    description: 'Title or honorific (optional)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  title?: string;
 
   @ApiProperty({
     example: 'General practitioner with 15 years experience.',
@@ -88,4 +103,20 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
   })
   @IsString()
   hospitalOrg: string;
+
+  @ApiProperty({
+    example: '1 Hospital Road, Lagos',
+    description: 'Organization street address',
+  })
+  @IsString()
+  @IsNotEmpty()
+  organizationAddress: string;
+
+  @ApiProperty({
+    example: 'Lagos Zone A',
+    description: 'ANPMP zone or chapter grouping',
+  })
+  @IsString()
+  @IsNotEmpty()
+  zone: string;
 }

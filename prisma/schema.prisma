@@ -167,23 +167,26 @@ model Admin {
 }
 
 model Member {
-  id               String   @id @default(cuid())
-  userId           String   @unique
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  slug             String   @unique
-  fullName         String
-  phone            String
-  bio              String?
-  anpmpId          String
-  hasSpouse        Boolean
-  spouseName       String?
-  spouseEmail      String?
-  spousePhone      String?
-  primarySpecialty String
-  hospitalOrg      String
-  avatar           String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug                  String   @unique
+  title                 String?
+  fullName              String
+  phone                 String
+  bio                   String?
+  anpmpId               String
+  hasSpouse             Boolean
+  spouseName            String?
+  spouseEmail           String?
+  spousePhone           String?
+  primarySpecialty      String
+  hospitalOrg           String
+  organizationAddress   String   @default("")
+  zone                  String   @default("")
+  avatar                String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 model Attendee {

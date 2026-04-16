@@ -53,7 +53,8 @@ export class RegistrationController {
           regType: 'member',
           email: 'dr.olatunji@example.com',
           password: 'securePassword123',
-          fullName: 'Dr. Kayode Olatunji',
+          title: 'Dr',
+          fullName: 'Kayode Olatunji',
           phone: '+234 800 123 4567',
           bio: 'General practitioner with 15 years experience.',
           anpmpId: 'ID-123456',
@@ -63,6 +64,8 @@ export class RegistrationController {
           spousePhone: '+234 800 765 4321',
           primarySpecialty: 'general',
           hospitalOrg: 'Lagos State Teaching Hospital',
+          organizationAddress: '1 Hospital Road, Lagos',
+          zone: 'Lagos Zone A',
         },
       },
       attendee: {

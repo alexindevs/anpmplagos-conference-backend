@@ -118,11 +118,14 @@ export class RegistrationService {
       registrationStatus: RegistrationStatus;
       member: {
         id: string;
+        title: string | null;
         fullName: string;
         phone: string;
         anpmpId: string;
         primarySpecialty: string;
         hospitalOrg: string;
+        organizationAddress: string;
+        zone: string;
         avatar: string;
       } | null;
       attendee: {
@@ -143,11 +146,14 @@ export class RegistrationService {
         member: {
           select: {
             id: true,
+            title: true,
             fullName: true,
             phone: true,
             anpmpId: true,
             primarySpecialty: true,
             hospitalOrg: true,
+            organizationAddress: true,
+            zone: true,
             avatar: true,
           },
         },
@@ -182,11 +188,14 @@ export class RegistrationService {
 
     if (user.member) {
       response.member = {
+        title: user.member.title,
         fullName: user.member.fullName,
         phone: user.member.phone,
         anpmpId: user.member.anpmpId,
         primarySpecialty: user.member.primarySpecialty,
         hospitalOrg: user.member.hospitalOrg,
+        organizationAddress: user.member.organizationAddress,
+        zone: user.member.zone,
         avatar: user.member.avatar,
       };
     }
@@ -251,6 +260,7 @@ export class RegistrationService {
         data: {
           userId: user.id,
           slug,
+          title: memberDto.title?.trim() || undefined,
           fullName: memberDto.fullName!,
           phone: memberDto.phone!,
           bio: memberDto.bio ?? undefined,
@@ -261,6 +271,8 @@ export class RegistrationService {
           spousePhone: memberDto.spousePhone ?? undefined,
           primarySpecialty: memberDto.primarySpecialty!,
           hospitalOrg: memberDto.hospitalOrg!,
+          organizationAddress: memberDto.organizationAddress!,
+          zone: memberDto.zone!,
           avatar: imagePaths?.avatar,
         },
       });

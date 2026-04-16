@@ -173,4 +173,36 @@ export class EventPassController {
   async getUserPasses(@Req() req: Request & { user: AuthUser }) {
     return this.eventPassService.getUserPasses(req.user.id);
   }
+
+  @Get('company/pass-purchase-eligibility')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Check pass purchase eligibility (company, member, or attendee)',
+    description:
+      '**Company:** `isEligible` when the company has at least one **successful** payment that is not `hotel_room` ' +
+      'and not a **hotel** cart `order` (counts booth, sessions, sponsorship, advert/branding, **conference** orders). ' +
+      '**Member / attendee:** `isEligible` when registration is complete (`registered`), i.e. registration has been paid. ' +
+      '**403** for other account types or a company user without a company profile.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Eligibility flag',
+    schema: {
+      type: 'object',
+      properties: {
+        isEligible: { type: 'boolean' },
+      },
+    },
+  })
+  async getPassPurchaseEligibility(
+    @Req() req: Request & { user: AuthUser },
+  ) {
+    const u = req.user;
+    return this.eventPassService.getPassPurchaseEligibility({
+      regType: u.regType,
+      userId: u.id,
+      companyId: u.company?.id,
+    });
+  }
 }

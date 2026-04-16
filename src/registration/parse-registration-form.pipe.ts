@@ -48,6 +48,12 @@ export class ParseRegistrationFormPipe implements PipeTransform<
           : undefined;
       dto.hospitalOrg =
         value.hospitalOrg != null ? String(value.hospitalOrg) : undefined;
+      dto.title = value.title != null ? String(value.title) : undefined;
+      dto.organizationAddress =
+        value.organizationAddress != null
+          ? String(value.organizationAddress)
+          : undefined;
+      dto.zone = value.zone != null ? String(value.zone) : undefined;
     }
 
     if (dto.regType === 'attendee') {

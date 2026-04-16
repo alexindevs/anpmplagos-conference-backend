@@ -28,6 +28,7 @@ import { koboBigInt } from '../common/kobo';
 import { effectiveDisplayTier } from './company-tier.util';
 import { CreateSponsorshipPlanDto } from './dto/create-sponsorship-plan.dto';
 import { UpdateSponsorshipPlanDto } from './dto/update-sponsorship-plan.dto';
+import { MemberSheetsService } from '../member-sheets/member-sheets.service';
 
 const PRODUCT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -39,6 +40,7 @@ export class CompanyService {
     private readonly cloudinary: CloudinaryService,
     private readonly advertSlotService: AdvertSlotService,
     private readonly brandingSlotService: BrandingSlotService,
+    private readonly memberSheets: MemberSheetsService,
   ) {}
 
   async findById(id: string) {
@@ -327,6 +329,7 @@ export class CompanyService {
     tx: Prisma.TransactionClient,
     advertIds: string[],
     brandingIds: string[],
+    opts?: { ignoreSponsorshipPlanId?: string },
   ) {
     for (const slotId of advertIds) {
       const slot = await tx.advertSlot.findUnique({ where: { id: slotId } });
@@ -338,6 +341,19 @@ export class CompanyService {
           `Advert slot "${slot.title}" is not available to attach (taken or reserved)`,
         );
       }
+      const linkedElsewhere = await tx.sponsorshipPlanAdvertSlot.count({
+        where: {
+          advertSlotId: slotId,
+          ...(opts?.ignoreSponsorshipPlanId
+            ? { sponsorshipPlanId: { not: opts.ignoreSponsorshipPlanId } }
+            : {}),
+        },
+      });
+      if (linkedElsewhere > 0) {
+        throw new BadRequestException(
+          `Advert slot "${slot.title}" is already linked to another sponsorship plan; each slot may only belong to one plan bundle`,
+        );
+      }
     }
     for (const slotId of brandingIds) {
       const slot = await tx.brandingSlot.findUnique({ where: { id: slotId } });
@@ -347,6 +363,19 @@ export class CompanyService {
       if (slot.isTaken || slot.isReserved) {
         throw new BadRequestException(
           `Branding slot "${slot.title}" is not available to attach (taken or reserved)`,
+        );
+      }
+      const linkedElsewhere = await tx.sponsorshipPlanBrandingSlot.count({
+        where: {
+          brandingSlotId: slotId,
+          ...(opts?.ignoreSponsorshipPlanId
+            ? { sponsorshipPlanId: { not: opts.ignoreSponsorshipPlanId } }
+            : {}),
+        },
+      });
+      if (linkedElsewhere > 0) {
+        throw new BadRequestException(
+          `Branding slot "${slot.title}" is already linked to another sponsorship plan; each slot may only belong to one plan bundle`,
         );
       }
     }
@@ -497,6 +526,7 @@ export class CompanyService {
           tx,
           advertIds ?? [],
           brandingIds ?? [],
+          { ignoreSponsorshipPlanId: id },
         );
       }
 
@@ -808,9 +838,10 @@ export class CompanyService {
       throw new NotFoundException('Company not found');
     }
 
-    const [totalMembers, pendingBoothPayment, whatsappClicksSum] =
+    const [totalMembers, totalAttendees, pendingBoothPayment, whatsappClicksSum] =
       await Promise.all([
         this.prisma.user.count({ where: { regType: 'member' } }),
+        this.memberSheets.getDataRowCount(),
         this.prisma.payment.findFirst({
           where: {
             companyId,
@@ -849,7 +880,8 @@ export class CompanyService {
       effectiveDisplayTier: effectiveDisplayTier(company),
       stats: {
         profileViews: views,
-        totalMembers,
+        totalMembers: totalAttendees,
+        totalAttendees,
         inquiryRatePercent,
         whatsappProductClicks: whatsappClicksSum._sum.whatsappClickCount ?? 0,
       },
@@ -870,22 +902,36 @@ export class CompanyService {
     });
   }
 
-  async createRepresentative(
+  /** Booth representatives require a purchased/assigned booth (`isTaken` on the company's booth). */
+  private async assertCompanyHasBoothForRepresentatives(
     companyId: string,
-    dto: CreateCompanyRepresentativeDto,
-  ) {
-    const company = await this.prisma.company.findUnique({
+  ): Promise<void> {
+    const companyExists = await this.prisma.company.findUnique({
       where: { id: companyId },
-      select: { id: true, booth: { select: { id: true } } },
+      select: { id: true },
     });
-    if (!company) {
+    if (!companyExists) {
       throw new NotFoundException('Company not found');
     }
-    if (!company.booth) {
+    const withBooth = await this.prisma.company.findFirst({
+      where: {
+        id: companyId,
+        booth: { isTaken: true },
+      },
+      select: { id: true },
+    });
+    if (!withBooth) {
       throw new BadRequestException(
         'Purchase and assign a booth before adding booth representatives',
       );
     }
+  }
+
+  async createRepresentative(
+    companyId: string,
+    dto: CreateCompanyRepresentativeDto,
+  ) {
+    await this.assertCompanyHasBoothForRepresentatives(companyId);
     return this.prisma.companyRepresentative.create({
       data: {
         companyId,

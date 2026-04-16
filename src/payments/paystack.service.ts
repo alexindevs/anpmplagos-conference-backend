@@ -42,6 +42,10 @@ import {
   type SponsorshipBundleResolutionEntry,
 } from '../sponsorship/sponsorship-bundle-resolution.service';
 import { koboBigInt, koboNumber } from '../common/kobo';
+import {
+  assertAdvertSlotsNotBundleOnly,
+  assertBrandingSlotsNotBundleOnly,
+} from '../marketing-slots/marketing-slot-bundle-guard';
 
 type PaystackInitializeResponse = {
   status: boolean;
@@ -826,6 +830,7 @@ export class PaystackService {
     if (!slot) {
       throw new NotFoundException(`Advert slot ${dto.advertSlotId} not found`);
     }
+    await assertAdvertSlotsNotBundleOnly(this.prisma, [slot.id]);
     if (slot.isReserved) {
       throw new BadRequestException(
         'This advert slot is reserved and cannot be purchased',
@@ -940,6 +945,7 @@ export class PaystackService {
         `Branding slot ${dto.brandingSlotId} not found`,
       );
     }
+    await assertBrandingSlotsNotBundleOnly(this.prisma, [slot.id]);
     if (slot.isReserved) {
       throw new BadRequestException(
         'This branding slot is reserved and cannot be purchased',
@@ -1166,7 +1172,11 @@ export class PaystackService {
       {
         companyId: company.id,
         lineInputs: [
-          { type: 'sponsorship_plan', sponsorshipPlanId: plan.id },
+          {
+            type: 'sponsorship_plan',
+            sponsorshipPlanId: plan.id,
+            quantity: 1,
+          },
         ],
       },
     );
@@ -1922,7 +1932,6 @@ export class PaystackService {
       }
       if (
         (booth.isTaken && booth.takenById !== company.id) ||
-        booth.isReserved ||
         isBlockedByOtherCheckoutHold(
           booth.checkoutHoldExpiresAt,
           booth.checkoutHoldOrderId,
@@ -1932,16 +1941,15 @@ export class PaystackService {
       ) {
         return 'Bundle booth became unavailable';
       }
-      if (!booth.isTaken || booth.takenById !== company.id) {
-        await this.prisma.booth.update({
-          where: { id: booth.id },
-          data: {
-            isTaken: true,
-            takenById: company.id,
-            ...clearHold,
-          },
-        });
-      }
+      await this.prisma.booth.update({
+        where: { id: booth.id },
+        data: {
+          isTaken: true,
+          takenById: company.id,
+          isReserved: false,
+          ...clearHold,
+        },
+      });
       await this.boothService.applyBoothTierToCompany(company.id, booth.tier);
       await Promise.all([
         this.cacheService.delPattern('booths:*'),

@@ -16,6 +16,10 @@ import { PaystackService } from '../payments/paystack.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SponsorshipBundleResolutionService } from '../sponsorship/sponsorship-bundle-resolution.service';
 import { CHECKOUT_HOLD_TTL_MS } from './checkout-hold.util';
+import {
+  assertAdvertSlotsNotBundleOnly,
+  assertBrandingSlotsNotBundleOnly,
+} from '../marketing-slots/marketing-slot-bundle-guard';
 import { CheckoutOrderDto } from './dto/checkout-order.dto';
 import { koboBigInt, koboNumber } from '../common/kobo';
 
@@ -339,6 +343,14 @@ export class OrderService {
         this.prisma,
         { companyId, lineInputs },
       );
+      const advertIds = lineInputs
+        .filter((l) => l.type === 'advert_slot' && l.advertSlotId)
+        .map((l) => l.advertSlotId!);
+      const brandingIds = lineInputs
+        .filter((l) => l.type === 'branding_slot' && l.brandingSlotId)
+        .map((l) => l.brandingSlotId!);
+      await assertAdvertSlotsNotBundleOnly(this.prisma, advertIds);
+      await assertBrandingSlotsNotBundleOnly(this.prisma, brandingIds);
     }
 
     const baseTotal = lineInputs.reduce(

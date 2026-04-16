@@ -16,12 +16,18 @@ import { AuthUser } from '../auth/auth.service';
 import { isBlockedByOtherCheckoutHold } from './checkout-hold.util';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  assertAdvertSlotsNotBundleOnly,
+  assertBrandingSlotsNotBundleOnly,
+} from '../marketing-slots/marketing-slot-bundle-guard';
+import { SponsorshipBundleResolutionService } from '../sponsorship/sponsorship-bundle-resolution.service';
 
 const UNIQUE_SLOT_TYPES: CartItemType[] = [
   'booth',
   'masterclass',
   'panel',
   'presentation',
+  'sponsorship_plan',
   'advert_slot',
   'branding_slot',
   'hotel_room',
@@ -29,7 +35,10 @@ const UNIQUE_SLOT_TYPES: CartItemType[] = [
 
 @Injectable()
 export class CartService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sponsorshipBundleResolution: SponsorshipBundleResolutionService,
+  ) {}
 
   private async getOrCreateCart(userId: string, kind: CartKind) {
     return this.prisma.cart.upsert({
@@ -157,15 +166,9 @@ export class CartService {
     });
 
     if (dto.type === 'sponsorship_plan' && existing) {
-      return this.prisma.cartItem.update({
-        where: { id: existing.id },
-        data: { quantity: existing.quantity + qty },
-        include: {
-          sponsorshipPlan: {
-            select: { id: true, name: true, priceInKobo: true, tier: true },
-          },
-        },
-      });
+      throw new BadRequestException(
+        'This sponsorship plan is already in your cart',
+      );
     }
 
     if (existing) {
@@ -332,6 +335,10 @@ export class CartService {
         if (!plan?.isActive) {
           throw new BadRequestException('Sponsorship plan is not available');
         }
+        await this.sponsorshipBundleResolution.assertNoPriorSponsorshipPurchase(
+          this.prisma,
+          companyId,
+        );
         return;
       }
       case 'advert_slot': {
@@ -341,6 +348,7 @@ export class CartService {
         if (!slot) {
           throw new NotFoundException('Advert slot not found');
         }
+        await assertAdvertSlotsNotBundleOnly(this.prisma, [slot.id]);
         this.assertMarketingSlotForCart(slot, companyId);
         return;
       }
@@ -351,6 +359,7 @@ export class CartService {
         if (!slot) {
           throw new NotFoundException('Branding slot not found');
         }
+        await assertBrandingSlotsNotBundleOnly(this.prisma, [slot.id]);
         this.assertMarketingSlotForCart(slot, companyId);
         return;
       }
@@ -374,6 +383,11 @@ export class CartService {
     const planIdSet = new Set(planIds);
     if (dto.type === 'sponsorship_plan' && dto.sponsorshipPlanId) {
       planIdSet.add(dto.sponsorshipPlanId);
+    }
+    if (planIdSet.size > 1) {
+      throw new BadRequestException(
+        'Only one sponsorship plan may be in the cart at a time',
+      );
     }
     const linkedPlans =
       planIdSet.size > 0

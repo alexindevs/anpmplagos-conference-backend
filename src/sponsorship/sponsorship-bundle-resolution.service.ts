@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   ConferenceDay,
+  PaymentKind,
+  PaymentStatus,
   Prisma,
   SessionSlotDuration,
   SessionStatus,
@@ -290,9 +292,8 @@ export class SponsorshipBundleResolutionService {
       where: {
         tier: params.tier,
         isTaken: false,
-        isReserved: false,
       },
-      orderBy: { id: 'asc' },
+      orderBy: [{ isReserved: 'asc' }, { id: 'asc' }],
     });
     return (
       booths.find(
@@ -369,31 +370,88 @@ export class SponsorshipBundleResolutionService {
     );
   }
 
+  /** True if this company has any successful sponsorship purchase (legacy or conference order). */
+  async companyHasSuccessfulSponsorshipPurchase(
+    prisma: Prisma.TransactionClient | Pick<PrismaService, 'payment'>,
+    companyId: string,
+  ): Promise<boolean> {
+    const legacy = await prisma.payment.findFirst({
+      where: {
+        companyId,
+        status: PaymentStatus.success,
+        kind: PaymentKind.sponsorship_plan,
+      },
+      select: { id: true },
+    });
+    if (legacy) {
+      return true;
+    }
+    const viaOrder = await prisma.payment.findFirst({
+      where: {
+        companyId,
+        status: PaymentStatus.success,
+        kind: PaymentKind.order,
+        order: {
+          items: { some: { type: 'sponsorship_plan' } },
+        },
+      },
+      select: { id: true },
+    });
+    return !!viaOrder;
+  }
+
+  async assertNoPriorSponsorshipPurchase(
+    prisma: Prisma.TransactionClient | Pick<PrismaService, 'payment'>,
+    companyId: string,
+  ): Promise<void> {
+    if (await this.companyHasSuccessfulSponsorshipPurchase(prisma, companyId)) {
+      throw new BadRequestException(
+        'Your company has already purchased a sponsorship plan; additional sponsorship purchases are not allowed',
+      );
+    }
+  }
+
   /**
    * Validates cart/order does not mix a bundle booth with a separate booth line, or an existing company booth.
    */
   async assertCheckoutCompatibleWithPlans(
-    prisma: Prisma.TransactionClient | Pick<PrismaService, 'sponsorshipPlan' | 'company'>,
+    prisma: Prisma.TransactionClient | Pick<PrismaService, 'sponsorshipPlan' | 'company' | 'payment'>,
     params: {
       companyId: string | null;
       lineInputs: Array<{
         type: string;
+        quantity?: number;
         boothId?: string | null;
         sponsorshipPlanId?: string | null;
       }>;
     },
   ): Promise<void> {
-    const planIds = params.lineInputs
-      .filter((l) => l.type === 'sponsorship_plan' && l.sponsorshipPlanId)
-      .map((l) => l.sponsorshipPlanId!);
+    const sponsorshipLines = params.lineInputs.filter(
+      (l) => l.type === 'sponsorship_plan' && l.sponsorshipPlanId,
+    );
+    const planIds = sponsorshipLines.map((l) => l.sponsorshipPlanId!);
     if (!planIds.length) {
       return;
+    }
+    for (const line of sponsorshipLines) {
+      const q = line.quantity ?? 1;
+      if (q > 1) {
+        throw new BadRequestException('Sponsorship plan quantity must be 1');
+      }
     }
     const uniquePlanIds = [...new Set(planIds)];
     if (uniquePlanIds.length !== planIds.length) {
       throw new BadRequestException(
         'Duplicate sponsorship plans cannot be checked out together',
       );
+    }
+    if (uniquePlanIds.length > 1) {
+      throw new BadRequestException(
+        'Only one sponsorship plan may be checked out at a time',
+      );
+    }
+    if (params.companyId) {
+      await this.assertNoPriorSponsorshipPurchase(prisma, params.companyId);
     }
     const plans = await prisma.sponsorshipPlan.findMany({
       where: { id: { in: planIds } },
