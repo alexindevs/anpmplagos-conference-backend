@@ -28,8 +28,23 @@ export class AdvertSlotService {
   ) {}
 
   findAvailable() {
+    const now = new Date();
     return this.prisma.advertSlot.findMany({
-      where: { isTaken: false, isReserved: false },
+      where: {
+        isTaken: false,
+        isReserved: false,
+        NOT: {
+          AND: [
+            { checkoutHoldExpiresAt: { gt: now } },
+            {
+              OR: [
+                { checkoutHoldOrderId: { not: null } },
+                { checkoutHoldPaymentId: { not: null } },
+              ],
+            },
+          ],
+        },
+      },
       orderBy: [{ createdAt: 'asc' }],
     });
   }

@@ -4,7 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma, SponsorTier } from '@prisma/client';
+import {
+  ConferenceDay,
+  SessionSlotDuration,
+  SponsorTier,
+} from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BoothService } from '../booth/booth.service';
 import { AdvertSlotService } from '../marketing-slots/advert-slot.service';
@@ -19,7 +24,10 @@ import { UpdateCompanyProductDto } from './dto/update-company-product.dto';
 import { UpdateCompanyProfileDto } from './dto/update-company-profile.dto';
 import { UpdateCompanyRepresentativeDto } from './dto/update-company-representative.dto';
 import { UpdateAdminCompanyDto } from './dto/update-admin-company.dto';
+import { koboBigInt } from '../common/kobo';
 import { effectiveDisplayTier } from './company-tier.util';
+import { CreateSponsorshipPlanDto } from './dto/create-sponsorship-plan.dto';
+import { UpdateSponsorshipPlanDto } from './dto/update-sponsorship-plan.dto';
 
 const PRODUCT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -249,7 +257,13 @@ export class CompanyService {
     ] as const;
     for (const k of keys) {
       if (dto[k] !== undefined) {
-        (data as Record<string, unknown>)[k] = dto[k];
+        if (k === 'sponsorshipPaidTotalKobo') {
+          data.sponsorshipPaidTotalKobo = koboBigInt(
+            dto.sponsorshipPaidTotalKobo as number,
+          );
+        } else {
+          (data as Record<string, unknown>)[k] = dto[k];
+        }
       }
     }
 
@@ -273,24 +287,127 @@ export class CompanyService {
     return this.prisma.sponsorshipPlan.findMany({
       where: { isActive: true },
       orderBy: { priceInKobo: 'asc' },
+      include: {
+        advertSlots: { select: { advertSlotId: true } },
+        brandingSlots: { select: { brandingSlotId: true } },
+      },
     });
   }
 
-  async createSponsorshipPlan(dto: {
-    name: string;
-    priceInKobo: number;
-    tier: SponsorTier;
-    perks?: string[];
-    isActive?: boolean;
-  }) {
-    return this.prisma.sponsorshipPlan.create({
-      data: {
-        name: dto.name,
-        priceInKobo: dto.priceInKobo,
-        tier: dto.tier,
-        perks: dto.perks ?? [],
-        isActive: dto.isActive ?? true,
-      },
+  private assertSponsorshipDurationDayPair(
+    duration: SessionSlotDuration | null | undefined,
+    day: ConferenceDay | null | undefined,
+    label: string,
+  ) {
+    const hasD = duration != null;
+    const hasDay = day != null;
+    if (hasD !== hasDay) {
+      throw new BadRequestException(
+        `${label}: provide both duration and conference day, or neither`,
+      );
+    }
+  }
+
+  private assertBundleBoothTierAllowed(tier: SponsorTier | null | undefined) {
+    if (tier == null) {
+      return;
+    }
+    const ok =
+      tier === SponsorTier.gold ||
+      tier === SponsorTier.platinum ||
+      tier === SponsorTier.headliner;
+    if (!ok) {
+      throw new BadRequestException(
+        'bundleBoothTier may only be gold, platinum, or headliner',
+      );
+    }
+  }
+
+  private async validateMarketingSlotsFreeForPlan(
+    tx: Prisma.TransactionClient,
+    advertIds: string[],
+    brandingIds: string[],
+  ) {
+    for (const slotId of advertIds) {
+      const slot = await tx.advertSlot.findUnique({ where: { id: slotId } });
+      if (!slot) {
+        throw new NotFoundException(`Advert slot ${slotId} not found`);
+      }
+      if (slot.isTaken || slot.isReserved) {
+        throw new BadRequestException(
+          `Advert slot "${slot.title}" is not available to attach (taken or reserved)`,
+        );
+      }
+    }
+    for (const slotId of brandingIds) {
+      const slot = await tx.brandingSlot.findUnique({ where: { id: slotId } });
+      if (!slot) {
+        throw new NotFoundException(`Branding slot ${slotId} not found`);
+      }
+      if (slot.isTaken || slot.isReserved) {
+        throw new BadRequestException(
+          `Branding slot "${slot.title}" is not available to attach (taken or reserved)`,
+        );
+      }
+    }
+  }
+
+  async createSponsorshipPlan(dto: CreateSponsorshipPlanDto) {
+    this.assertSponsorshipDurationDayPair(
+      dto.bundleMasterclassDuration,
+      dto.bundleMasterclassDay,
+      'Masterclass bundle rule',
+    );
+    this.assertSponsorshipDurationDayPair(
+      dto.bundlePresentationDuration,
+      dto.bundlePresentationDay,
+      'Presentation bundle rule',
+    );
+    this.assertBundleBoothTierAllowed(dto.bundleBoothTier);
+
+    const advertIds = [...new Set(dto.advertSlotIds ?? [])];
+    const brandingIds = [...new Set(dto.brandingSlotIds ?? [])];
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.validateMarketingSlotsFreeForPlan(tx, advertIds, brandingIds);
+      const plan = await tx.sponsorshipPlan.create({
+        data: {
+          name: dto.name,
+          priceInKobo: koboBigInt(dto.priceInKobo),
+          tier: dto.tier,
+          perks: dto.perks ?? [],
+          isActive: dto.isActive ?? true,
+          ticketAdmits: dto.ticketAdmits ?? 1,
+          bundleBoothTier: dto.bundleBoothTier,
+          bundleMasterclassDuration: dto.bundleMasterclassDuration,
+          bundleMasterclassDay: dto.bundleMasterclassDay,
+          bundlePresentationDuration: dto.bundlePresentationDuration,
+          bundlePresentationDay: dto.bundlePresentationDay,
+        },
+      });
+      if (advertIds.length) {
+        await tx.sponsorshipPlanAdvertSlot.createMany({
+          data: advertIds.map((advertSlotId) => ({
+            sponsorshipPlanId: plan.id,
+            advertSlotId,
+          })),
+        });
+      }
+      if (brandingIds.length) {
+        await tx.sponsorshipPlanBrandingSlot.createMany({
+          data: brandingIds.map((brandingSlotId) => ({
+            sponsorshipPlanId: plan.id,
+            brandingSlotId,
+          })),
+        });
+      }
+      return tx.sponsorshipPlan.findUnique({
+        where: { id: plan.id },
+        include: {
+          advertSlots: { include: { advertSlot: true } },
+          brandingSlots: { include: { brandingSlot: true } },
+        },
+      });
     });
   }
 
@@ -309,25 +426,24 @@ export class CompanyService {
     return this.prisma.sponsorshipPlan.findMany({
       where,
       orderBy: { priceInKobo: 'asc' },
+      include: {
+        advertSlots: { select: { advertSlotId: true } },
+        brandingSlots: { select: { brandingSlotId: true } },
+      },
     });
   }
 
   async findSponsorshipPlanById(id: string) {
     return this.prisma.sponsorshipPlan.findUnique({
       where: { id },
+      include: {
+        advertSlots: { include: { advertSlot: true } },
+        brandingSlots: { include: { brandingSlot: true } },
+      },
     });
   }
 
-  async updateSponsorshipPlan(
-    id: string,
-    dto: {
-      name?: string;
-      priceInKobo?: number;
-      tier?: SponsorTier;
-      perks?: string[];
-      isActive?: boolean;
-    },
-  ) {
+  async updateSponsorshipPlan(id: string, dto: UpdateSponsorshipPlanDto) {
     const plan = await this.prisma.sponsorshipPlan.findUnique({
       where: { id },
     });
@@ -335,15 +451,120 @@ export class CompanyService {
       throw new NotFoundException(`Sponsorship plan ${id} not found`);
     }
 
-    return this.prisma.sponsorshipPlan.update({
-      where: { id },
-      data: {
-        name: dto.name,
-        priceInKobo: dto.priceInKobo,
-        tier: dto.tier,
-        perks: dto.perks,
-        isActive: dto.isActive,
-      },
+    const nextMcDur =
+      dto.bundleMasterclassDuration !== undefined
+        ? dto.bundleMasterclassDuration
+        : plan.bundleMasterclassDuration;
+    const nextMcDay =
+      dto.bundleMasterclassDay !== undefined
+        ? dto.bundleMasterclassDay
+        : plan.bundleMasterclassDay;
+    const nextPrDur =
+      dto.bundlePresentationDuration !== undefined
+        ? dto.bundlePresentationDuration
+        : plan.bundlePresentationDuration;
+    const nextPrDay =
+      dto.bundlePresentationDay !== undefined
+        ? dto.bundlePresentationDay
+        : plan.bundlePresentationDay;
+    const nextBoothTier =
+      dto.bundleBoothTier !== undefined ? dto.bundleBoothTier : plan.bundleBoothTier;
+
+    this.assertSponsorshipDurationDayPair(
+      nextMcDur,
+      nextMcDay,
+      'Masterclass bundle rule',
+    );
+    this.assertSponsorshipDurationDayPair(
+      nextPrDur,
+      nextPrDay,
+      'Presentation bundle rule',
+    );
+    this.assertBundleBoothTierAllowed(nextBoothTier);
+
+    const advertIds =
+      dto.advertSlotIds !== undefined
+        ? [...new Set(dto.advertSlotIds)]
+        : null;
+    const brandingIds =
+      dto.brandingSlotIds !== undefined
+        ? [...new Set(dto.brandingSlotIds)]
+        : null;
+
+    return this.prisma.$transaction(async (tx) => {
+      if (advertIds !== null || brandingIds !== null) {
+        await this.validateMarketingSlotsFreeForPlan(
+          tx,
+          advertIds ?? [],
+          brandingIds ?? [],
+        );
+      }
+
+      const data: Prisma.SponsorshipPlanUpdateInput = {};
+      if (dto.name !== undefined) data.name = dto.name;
+      if (dto.priceInKobo !== undefined) {
+        data.priceInKobo = koboBigInt(dto.priceInKobo);
+      }
+      if (dto.tier !== undefined) data.tier = dto.tier;
+      if (dto.perks !== undefined) data.perks = dto.perks;
+      if (dto.isActive !== undefined) data.isActive = dto.isActive;
+      if (dto.ticketAdmits !== undefined) data.ticketAdmits = dto.ticketAdmits;
+      if (dto.bundleBoothTier !== undefined) {
+        data.bundleBoothTier = dto.bundleBoothTier;
+      }
+      if (dto.bundleMasterclassDuration !== undefined) {
+        data.bundleMasterclassDuration = dto.bundleMasterclassDuration;
+      }
+      if (dto.bundleMasterclassDay !== undefined) {
+        data.bundleMasterclassDay = dto.bundleMasterclassDay;
+      }
+      if (dto.bundlePresentationDuration !== undefined) {
+        data.bundlePresentationDuration = dto.bundlePresentationDuration;
+      }
+      if (dto.bundlePresentationDay !== undefined) {
+        data.bundlePresentationDay = dto.bundlePresentationDay;
+      }
+
+      await tx.sponsorshipPlan.update({
+        where: { id },
+        data,
+      });
+
+      if (advertIds !== null) {
+        await tx.sponsorshipPlanAdvertSlot.deleteMany({
+          where: { sponsorshipPlanId: id },
+        });
+        if (advertIds.length) {
+          await tx.sponsorshipPlanAdvertSlot.createMany({
+            data: advertIds.map((advertSlotId) => ({
+              sponsorshipPlanId: id,
+              advertSlotId,
+            })),
+          });
+        }
+      }
+
+      if (brandingIds !== null) {
+        await tx.sponsorshipPlanBrandingSlot.deleteMany({
+          where: { sponsorshipPlanId: id },
+        });
+        if (brandingIds.length) {
+          await tx.sponsorshipPlanBrandingSlot.createMany({
+            data: brandingIds.map((brandingSlotId) => ({
+              sponsorshipPlanId: id,
+              brandingSlotId,
+            })),
+          });
+        }
+      }
+
+      return tx.sponsorshipPlan.findUnique({
+        where: { id },
+        include: {
+          advertSlots: { include: { advertSlot: true } },
+          brandingSlots: { include: { brandingSlot: true } },
+        },
+      });
     });
   }
 
@@ -649,7 +870,22 @@ export class CompanyService {
     });
   }
 
-  createRepresentative(companyId: string, dto: CreateCompanyRepresentativeDto) {
+  async createRepresentative(
+    companyId: string,
+    dto: CreateCompanyRepresentativeDto,
+  ) {
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, booth: { select: { id: true } } },
+    });
+    if (!company) {
+      throw new NotFoundException('Company not found');
+    }
+    if (!company.booth) {
+      throw new BadRequestException(
+        'Purchase and assign a booth before adding booth representatives',
+      );
+    }
     return this.prisma.companyRepresentative.create({
       data: {
         companyId,

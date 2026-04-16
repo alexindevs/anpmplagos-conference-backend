@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { JwtModule } from '@nestjs/jwt';
 import type { SignOptions } from 'jsonwebtoken';
 import { PassportModule } from '@nestjs/passport';
@@ -24,6 +26,8 @@ import { GalleryModule } from './gallery/gallery.module';
 import { ConferenceProfileModule } from './conference-profile/conference-profile.module';
 import { EventPassModule } from './event-pass/event-pass.module';
 import { CacheModule } from './cache/cache.module';
+import { CommerceModule } from './commerce/commerce.module';
+import { KoboMoneySerializeInterceptor } from './common/kobo-money-serialize.interceptor';
 
 @Module({
   imports: [
@@ -31,6 +35,7 @@ import { CacheModule } from './cache/cache.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     CacheModule,
     PrismaModule,
     CloudinaryModule,
@@ -50,6 +55,7 @@ import { CacheModule } from './cache/cache.module';
     GalleryModule,
     ConferenceProfileModule,
     EventPassModule,
+    CommerceModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -64,6 +70,12 @@ import { CacheModule } from './cache/cache.module';
     }),
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: KoboMoneySerializeInterceptor,
+    },
+  ],
 })
 export class AppModule {}

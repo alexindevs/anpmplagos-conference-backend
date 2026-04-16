@@ -8,6 +8,7 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ConferenceDay, SessionSlotDuration } from '@prisma/client';
 
 export class UpdateMasterclassDto {
   @ApiPropertyOptional({ example: 'Advanced Surgical Techniques - Updated' })
@@ -46,4 +47,14 @@ export class UpdateMasterclassDto {
   @IsBoolean()
   @IsOptional()
   isReserved?: boolean;
+
+  @ApiPropertyOptional({ enum: SessionSlotDuration })
+  @IsEnum(SessionSlotDuration)
+  @IsOptional()
+  slotDuration?: SessionSlotDuration;
+
+  @ApiPropertyOptional({ enum: ConferenceDay })
+  @IsEnum(ConferenceDay)
+  @IsOptional()
+  conferenceDay?: ConferenceDay;
 }

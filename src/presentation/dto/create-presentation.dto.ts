@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, Min, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ConferenceDay, SessionSlotDuration } from '@prisma/client';
 
 export class CreatePresentationDto {
   @ApiProperty({ example: 'Product showcase presentation' })
@@ -21,4 +22,12 @@ export class CreatePresentationDto {
   @Type(() => Number)
   @Min(0)
   priceInKobo: number;
+
+  @ApiProperty({ enum: SessionSlotDuration, example: SessionSlotDuration.m30 })
+  @IsEnum(SessionSlotDuration)
+  slotDuration: SessionSlotDuration;
+
+  @ApiProperty({ enum: ConferenceDay, example: ConferenceDay.day_1 })
+  @IsEnum(ConferenceDay)
+  conferenceDay: ConferenceDay;
 }

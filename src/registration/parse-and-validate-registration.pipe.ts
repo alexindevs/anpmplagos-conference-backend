@@ -7,8 +7,8 @@ import { ParseRegistrationFormPipe } from './parse-registration-form.pipe';
 type FormBody = Record<string, unknown>;
 
 /**
- * Multipart registration must parse `representatives` (JSON string) before class-validator runs.
- * Global ValidationPipe runs *before* parameter pipes, so it would see a string and fail @IsArray().
+ * Multipart registration normalizes form fields before class-validator runs.
+ * Global ValidationPipe runs *before* parameter pipes, so multipart strings would fail coercion.
  * This pipe runs parse then validate. Use `@Body(ParseAndValidateRegistrationPipe) dto: Object`
  * so the global pipe skips (metatype Object is excluded from validation).
  */

@@ -1,10 +1,12 @@
 import { SponsorTier } from '@prisma/client';
 
 const RANK: Record<SponsorTier, number> = {
-  silver: 1,
-  gold: 2,
-  platinum: 3,
-  headliner: 4,
+  default: 0,
+  bronze: 1,
+  silver: 2,
+  gold: 3,
+  platinum: 4,
+  headliner: 5,
 };
 
 export function tierRank(t: SponsorTier | null | undefined): number {
@@ -21,7 +23,7 @@ export function maxTier(
 }
 
 /**
- * Exhibitors default to **silver** when no higher source applies.
+ * Companies start at **default** until a booth or sponsorship plan raises recognition.
  * Stored `highestSponsorshipTier` is updated on booth purchase (booth tier when set)
  * and when sponsorship exceeds the current tier; we still max with live `booth.tier` for consistency.
  */
@@ -31,8 +33,8 @@ export function effectiveDisplayTier(company: {
 }): SponsorTier {
   return (
     maxTier(
-      company.highestSponsorshipTier ?? SponsorTier.silver,
+      company.highestSponsorshipTier ?? SponsorTier.default,
       company.booth?.tier ?? null,
-    ) ?? SponsorTier.silver
+    ) ?? SponsorTier.default
   );
 }

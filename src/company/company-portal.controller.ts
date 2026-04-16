@@ -122,7 +122,11 @@ export class CompanyPortalController {
   @Post('me/representatives')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Add a representative' })
+  @ApiOperation({
+    summary: 'Add a booth representative',
+    description:
+      'Requires an assigned booth (after successful booth purchase or admin assignment).',
+  })
   addRepresentative(
     @Req() req: AuthedReq,
     @Body() dto: CreateCompanyRepresentativeDto,

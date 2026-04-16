@@ -41,11 +41,29 @@ enum RegistrationStatus {
   cancelled
 }
 
+/// Company baseline is `default` until a booth or sponsorship plan raises tier. Catalog sponsorship **plans** use bronze–headliner only (validated in app).
 enum SponsorTier {
-  headliner
-  platinum
-  gold
+  default
+  bronze
   silver
+  gold
+  platinum
+  headliner
+}
+
+enum SessionSlotDuration {
+  m10
+  m15
+  m20
+  m30
+  m45
+  h1
+  h2
+}
+
+enum ConferenceDay {
+  day_1
+  day_2
 }
 
 enum SessionStatus {
@@ -56,6 +74,7 @@ enum SessionStatus {
 
 enum PaymentKind {
   registration
+  order
   booth
   masterclass
   panel
@@ -64,6 +83,29 @@ enum PaymentKind {
   sponsorship_plan
   advert_slot
   branding_slot
+}
+
+enum CartKind {
+  conference
+  hotel
+}
+
+enum CartItemType {
+  booth
+  masterclass
+  panel
+  presentation
+  sponsorship_plan
+  advert_slot
+  branding_slot
+  hotel_room
+}
+
+enum OrderStatus {
+  pending_payment
+  paid
+  cancelled
+  failed
 }
 
 enum PaymentStatus {
@@ -92,6 +134,8 @@ model User {
   admin              Admin?
   refreshTokens      RefreshToken[]
   payments           Payment[]
+  carts              Cart[]
+  orders             Order[]
   hotelRoomsBooked   HotelRoom[]        @relation("HotelRoomBooking")
   supportTickets     SupportTicket[]
   eventPasses        EventPass[]
@@ -175,8 +219,8 @@ model Company {
   headerImage              String?
   logo                     String?
   profileViews             Int                     @default(0)
-  sponsorshipPaidTotalKobo Int                     @default(0)
-  highestSponsorshipTier   SponsorTier?           @default(silver)
+  sponsorshipPaidTotalKobo BigInt                  @default(0)
+  highestSponsorshipTier   SponsorTier?           @default(default)
   booth                    Booth?
   representatives          CompanyRepresentative[]
   products                 CompanyProduct[]
@@ -187,6 +231,7 @@ model Company {
   presentations            Presentation[]          @relation("PresentationTakenBy")
   advertSlots              AdvertSlot[]            @relation("CompanyAdvertSlots")
   brandingSlots            BrandingSlot[]          @relation("CompanyBrandingSlots")
+  orders                   Order[]
   createdAt                DateTime                @default(now())
   updatedAt                DateTime                @updatedAt
 }
@@ -234,77 +279,103 @@ model CompanyRepresentative {
 }
 
 model HotelRoom {
-  id          String    @id @default(cuid())
-  hotelName   String
-  roomType    String
-  description String?
-  price       Int
-  isBooked    Boolean   @default(false)
-  isReserved  Boolean   @default(false)
-  bookedById  String?
-  bookedBy    User?     @relation("HotelRoomBooking", fields: [bookedById], references: [id], onDelete: SetNull)
-  payments    Payment[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  hotelName             String
+  roomType              String
+  description           String?
+  price                 Int
+  isBooked              Boolean   @default(false)
+  isReserved            Boolean   @default(false)
+  checkoutHoldExpiresAt DateTime?
+  checkoutHoldOrderId   String?
+  checkoutHoldPaymentId String?
+  bookedById            String?
+  bookedBy              User?     @relation("HotelRoomBooking", fields: [bookedById], references: [id], onDelete: SetNull)
+  payments              Payment[]
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@index([hotelName])
   @@index([isBooked, isReserved])
   @@index([bookedById])
+  @@index([checkoutHoldExpiresAt])
 }
 
 model Booth {
-  id          String       @id @default(cuid())
-  name        String
-  size        String
-  price       Int // kobo (1 NGN = 100 kobo)
-  boothImage  String?
-  description String?
-  tier        SponsorTier?
-  isTaken     Boolean      @default(false)
-  isReserved  Boolean      @default(false)
-  takenById   String?      @unique
-  takenBy     Company?     @relation(fields: [takenById], references: [id], onDelete: SetNull)
-  payments    Payment[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                    String       @id @default(cuid())
+  name                  String
+  size                  String
+  price                 Int // kobo (1 NGN = 100 kobo)
+  boothImage            String?
+  description           String?
+  tier                  SponsorTier?
+  isTaken               Boolean      @default(false)
+  isReserved            Boolean      @default(false)
+  checkoutHoldExpiresAt DateTime?
+  checkoutHoldOrderId   String?
+  checkoutHoldPaymentId String?
+  takenById             String?      @unique
+  takenBy               Company?     @relation(fields: [takenById], references: [id], onDelete: SetNull)
+  payments              Payment[]
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
   @@index([tier])
+  @@index([checkoutHoldExpiresAt])
 }
 
 model AdvertSlot {
-  id          String    @id @default(cuid())
-  title       String
-  image       String
-  price       Int // kobo
-  description String?
-  isTaken     Boolean   @default(false)
-  isReserved  Boolean   @default(false)
-  takenById   String?
-  takenBy     Company?  @relation("CompanyAdvertSlots", fields: [takenById], references: [id], onDelete: SetNull)
-  payments    Payment[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  title                 String
+  image                 String
+  price                 Int // kobo
+  description           String?
+  isTaken               Boolean   @default(false)
+  isReserved            Boolean   @default(false)
+  checkoutHoldExpiresAt DateTime?
+  checkoutHoldOrderId   String?
+  checkoutHoldPaymentId String?
+  takenById             String?
+  takenBy               Company?  @relation("CompanyAdvertSlots", fields: [takenById], references: [id], onDelete: SetNull)
+  payments              Payment[]
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  sponsorshipPlanLinks  SponsorshipPlanAdvertSlot[]
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@index([takenById])
   @@index([isTaken, isReserved])
+  @@index([checkoutHoldExpiresAt])
 }
 
 model BrandingSlot {
-  id          String    @id @default(cuid())
-  title       String
-  image       String
-  price       Int // kobo
-  description String?
-  isTaken     Boolean   @default(false)
-  isReserved  Boolean   @default(false)
-  takenById   String?
-  takenBy     Company?  @relation("CompanyBrandingSlots", fields: [takenById], references: [id], onDelete: SetNull)
-  payments    Payment[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  title                 String
+  image                 String
+  price                 Int // kobo
+  description           String?
+  isTaken               Boolean   @default(false)
+  isReserved            Boolean   @default(false)
+  checkoutHoldExpiresAt DateTime?
+  checkoutHoldOrderId   String?
+  checkoutHoldPaymentId String?
+  takenById             String?
+  takenBy               Company?  @relation("CompanyBrandingSlots", fields: [takenById], references: [id], onDelete: SetNull)
+  payments              Payment[]
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  sponsorshipPlanLinks  SponsorshipPlanBrandingSlot[]
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@index([takenById])
   @@index([isTaken, isReserved])
+  @@index([checkoutHoldExpiresAt])
 }
 
 model RegistrationPlan {
@@ -320,75 +391,219 @@ model RegistrationPlan {
 model SponsorshipPlan {
   id          String      @id @default(cuid())
   name        String
-  priceInKobo Int
+  priceInKobo BigInt
   tier        SponsorTier
   perks       String[]
   isActive    Boolean     @default(true)
+  ticketAdmits              Int                  @default(1)
+  bundleBoothTier           SponsorTier?
+  bundleMasterclassDuration SessionSlotDuration?
+  bundleMasterclassDay      ConferenceDay?
+  bundlePresentationDuration SessionSlotDuration?
+  bundlePresentationDay     ConferenceDay?
+  advertSlots               SponsorshipPlanAdvertSlot[]
+  brandingSlots             SponsorshipPlanBrandingSlot[]
   payments    Payment[]
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }
 
+model SponsorshipPlanAdvertSlot {
+  id                String          @id @default(cuid())
+  sponsorshipPlanId String
+  sponsorshipPlan   SponsorshipPlan @relation(fields: [sponsorshipPlanId], references: [id], onDelete: Cascade)
+  advertSlotId      String
+  advertSlot        AdvertSlot      @relation(fields: [advertSlotId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+
+  @@unique([sponsorshipPlanId, advertSlotId])
+  @@index([advertSlotId])
+}
+
+model SponsorshipPlanBrandingSlot {
+  id                String          @id @default(cuid())
+  sponsorshipPlanId String
+  sponsorshipPlan   SponsorshipPlan @relation(fields: [sponsorshipPlanId], references: [id], onDelete: Cascade)
+  brandingSlotId    String
+  brandingSlot      BrandingSlot    @relation(fields: [brandingSlotId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+
+  @@unique([sponsorshipPlanId, brandingSlotId])
+  @@index([brandingSlotId])
+}
+
 model Masterclass {
-  id          String        @id @default(cuid())
-  title       String
-  description String
-  priceInKobo Int
-  isTaken     Boolean       @default(false)
-  isReserved  Boolean       @default(false)
-  takenById   String?
-  takenBy     Company?      @relation("MasterclassTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
-  status      SessionStatus @default(draft)
-  payments    Payment[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                    String        @id @default(cuid())
+  title                 String
+  description           String
+  priceInKobo           Int
+  slotDuration          SessionSlotDuration @default(m30)
+  conferenceDay         ConferenceDay     @default(day_1)
+  isTaken               Boolean       @default(false)
+  isReserved            Boolean       @default(false)
+  checkoutHoldExpiresAt DateTime?
+  checkoutHoldOrderId   String?
+  checkoutHoldPaymentId String?
+  takenById             String?
+  takenBy               Company?      @relation("MasterclassTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
+  status                SessionStatus @default(draft)
+  payments              Payment[]
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
   @@index([takenById])
   @@index([isTaken, isReserved])
+  @@index([checkoutHoldExpiresAt])
 }
 
 model PanelSession {
-  id          String        @id @default(cuid())
-  title       String
-  description String
-  priceInKobo Int
-  isTaken     Boolean       @default(false)
-  isReserved  Boolean       @default(false)
-  takenById   String?
-  takenBy     Company?      @relation("PanelSessionTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
-  status      SessionStatus @default(draft)
-  payments    Payment[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                    String        @id @default(cuid())
+  title                 String
+  description           String
+  priceInKobo           Int
+  isTaken               Boolean       @default(false)
+  isReserved            Boolean       @default(false)
+  checkoutHoldExpiresAt DateTime?
+  checkoutHoldOrderId   String?
+  checkoutHoldPaymentId String?
+  takenById             String?
+  takenBy               Company?      @relation("PanelSessionTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
+  status                SessionStatus @default(draft)
+  payments              Payment[]
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
   @@index([takenById])
   @@index([isTaken, isReserved])
+  @@index([checkoutHoldExpiresAt])
 }
 
 model Presentation {
-  id          String        @id @default(cuid())
-  title       String
-  description String
-  priceInKobo Int
-  isTaken     Boolean       @default(false)
-  isReserved  Boolean       @default(false)
-  takenById   String?
-  takenBy     Company?      @relation("PresentationTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
-  status      SessionStatus @default(draft)
-  payments    Payment[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                    String        @id @default(cuid())
+  title                 String
+  description           String
+  priceInKobo           Int
+  slotDuration          SessionSlotDuration @default(m30)
+  conferenceDay         ConferenceDay     @default(day_1)
+  isTaken               Boolean       @default(false)
+  isReserved            Boolean       @default(false)
+  checkoutHoldExpiresAt DateTime?
+  checkoutHoldOrderId   String?
+  checkoutHoldPaymentId String?
+  takenById             String?
+  takenBy               Company?      @relation("PresentationTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
+  status                SessionStatus @default(draft)
+  payments              Payment[]
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
   @@index([takenById])
   @@index([isTaken, isReserved])
+  @@index([checkoutHoldExpiresAt])
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      CartKind
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([userId, kind])
+  @@index([userId])
+}
+
+model CartItem {
+  id                String       @id @default(cuid())
+  cartId            String
+  cart              Cart         @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  type              CartItemType
+  quantity          Int          @default(1)
+  boothId           String?
+  booth             Booth?       @relation(fields: [boothId], references: [id], onDelete: SetNull)
+  masterclassId     String?
+  masterclass       Masterclass? @relation(fields: [masterclassId], references: [id], onDelete: SetNull)
+  panelSessionId    String?
+  panelSession      PanelSession? @relation(fields: [panelSessionId], references: [id], onDelete: SetNull)
+  presentationId    String?
+  presentation      Presentation? @relation(fields: [presentationId], references: [id], onDelete: SetNull)
+  sponsorshipPlanId String?
+  sponsorshipPlan   SponsorshipPlan? @relation(fields: [sponsorshipPlanId], references: [id], onDelete: SetNull)
+  hotelRoomId       String?
+  hotelRoom         HotelRoom?   @relation(fields: [hotelRoomId], references: [id], onDelete: SetNull)
+  advertSlotId      String?
+  advertSlot        AdvertSlot?  @relation(fields: [advertSlotId], references: [id], onDelete: SetNull)
+  brandingSlotId    String?
+  brandingSlot      BrandingSlot? @relation(fields: [brandingSlotId], references: [id], onDelete: SetNull)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([cartId])
+}
+
+model Order {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String?
+  company   Company?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  cartKind  CartKind
+  status    OrderStatus @default(pending_payment)
+  items     OrderItem[]
+  payments  Payment[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([status])
+}
+
+model OrderItem {
+  id                 String       @id @default(cuid())
+  orderId            String
+  order              Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type               CartItemType
+  quantity           Int
+  unitBaseAmountKobo BigInt
+  titleSnapshot      String?
+  boothId            String?
+  booth              Booth?       @relation(fields: [boothId], references: [id], onDelete: SetNull)
+  masterclassId      String?
+  masterclass        Masterclass? @relation(fields: [masterclassId], references: [id], onDelete: SetNull)
+  panelSessionId     String?
+  panelSession       PanelSession? @relation(fields: [panelSessionId], references: [id], onDelete: SetNull)
+  presentationId     String?
+  presentation       Presentation? @relation(fields: [presentationId], references: [id], onDelete: SetNull)
+  sponsorshipPlanId  String?
+  sponsorshipPlan    SponsorshipPlan? @relation(fields: [sponsorshipPlanId], references: [id], onDelete: SetNull)
+  hotelRoomId        String?
+  hotelRoom          HotelRoom?   @relation(fields: [hotelRoomId], references: [id], onDelete: SetNull)
+  advertSlotId       String?
+  advertSlot         AdvertSlot?  @relation(fields: [advertSlotId], references: [id], onDelete: SetNull)
+  brandingSlotId     String?
+  brandingSlot       BrandingSlot? @relation(fields: [brandingSlotId], references: [id], onDelete: SetNull)
+  createdAt          DateTime     @default(now())
+
+  @@index([orderId])
 }
 
 model Payment {
   id                String           @id @default(cuid())
   reference         String           @unique
   kind              PaymentKind
-  baseAmount        Int
-  amount            Int
+  baseAmount        BigInt
+  amount            BigInt
   status            PaymentStatus    @default(pending)
   provider          String
   providerResponse  Json?
@@ -412,6 +627,9 @@ model Payment {
   advertSlot        AdvertSlot?      @relation(fields: [advertSlotId], references: [id], onDelete: SetNull)
   brandingSlotId    String?
   brandingSlot      BrandingSlot?    @relation(fields: [brandingSlotId], references: [id], onDelete: SetNull)
+  orderId           String?
+  order             Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  sponsorshipResolution Json?
   paidAt            DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
@@ -423,6 +641,7 @@ model Payment {
   @@index([kind, hotelRoomId])
   @@index([kind, advertSlotId])
   @@index([kind, brandingSlotId])
+  @@index([orderId])
   @@index([userId])
   @@index([companyId])
 }

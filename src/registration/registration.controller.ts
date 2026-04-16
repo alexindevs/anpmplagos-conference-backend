@@ -105,18 +105,6 @@ export class RegistrationController {
           contactEmail: 'contact@medicorp.com',
           primaryContactName: 'Sarah Jenkins',
           primaryContactPhone: '+234 800 555 6666',
-          representatives: [
-            {
-              name: 'Sarah Jenkins',
-              title: 'VP of Sales',
-              phone: '+234 800 555 6666',
-            },
-            {
-              name: 'Michael Chen',
-              title: 'Product Manager',
-              phone: '+234 800 777 8888',
-            },
-          ],
         },
       },
     },

@@ -23,7 +23,11 @@ export class CompanyController {
   ) {}
 
   @Get('booths/available')
-  @ApiOperation({ summary: 'List available (non-taken) booths for companies' })
+  @ApiOperation({
+    summary: 'List available booths for standalone purchase (companies)',
+    description:
+      'Only **silver** and **bronze** tier slots that are free (not taken, not reserved, not in another checkout hold). Gold/platinum/headliner booths are not listed; they are assigned via sponsorship bundles.',
+  })
   @ApiResponse({ status: 200, description: 'List of available booths' })
   async getAvailableBooths() {
     return this.boothService.findAvailable();

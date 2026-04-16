@@ -39,9 +39,29 @@ export class BoothService {
     private readonly cloudinary: CloudinaryService,
   ) {}
 
+  /**
+   * Booths purchasable standalone (cart / booth payment): **silver** and **bronze** only.
+   * Higher tiers are assigned via sponsorship bundle fulfillment, not listed here.
+   */
   async findAvailable(): Promise<Booth[]> {
+    const now = new Date();
     return this.prisma.booth.findMany({
-      where: { isTaken: false, isReserved: false },
+      where: {
+        isTaken: false,
+        isReserved: false,
+        tier: { in: [SponsorTier.silver, SponsorTier.bronze] },
+        NOT: {
+          AND: [
+            { checkoutHoldExpiresAt: { gt: now } },
+            {
+              OR: [
+                { checkoutHoldOrderId: { not: null } },
+                { checkoutHoldPaymentId: { not: null } },
+              ],
+            },
+          ],
+        },
+      },
       orderBy: [{ name: 'asc' }],
     });
   }
@@ -266,7 +286,7 @@ export class BoothService {
       return;
     }
 
-    const currentTier = company.highestSponsorshipTier ?? SponsorTier.silver;
+    const currentTier = company.highestSponsorshipTier ?? SponsorTier.default;
 
     if (tierRank(boothTier) > tierRank(currentTier)) {
       await this.prisma.company.update({

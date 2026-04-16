@@ -300,7 +300,7 @@ export class EventPassService {
     } else if (user.regType === 'company') {
       const hasBooth = user.company?.booth !== null;
       const hasSponsorshipPayment =
-        (user.company?.sponsorshipPaidTotalKobo ?? 0) > 0;
+        Number(user.company?.sponsorshipPaidTotalKobo ?? 0) > 0;
 
       if (!hasBooth && !hasSponsorshipPayment) {
         throw new BadRequestException(

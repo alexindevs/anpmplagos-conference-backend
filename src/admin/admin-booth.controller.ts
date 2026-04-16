@@ -79,7 +79,7 @@ export class AdminBoothController {
         description: { type: 'string', example: 'Near main entrance' },
         tier: {
           type: 'string',
-          enum: ['headliner', 'platinum', 'gold', 'silver'],
+          enum: ['headliner', 'platinum', 'gold', 'silver', 'bronze'],
           description: 'Booth slot / zone tier',
         },
         isReserved: {

@@ -171,6 +171,7 @@ export class PaymentsController {
     required: false,
     enum: [
       'registration',
+      'order',
       'booth',
       'masterclass',
       'panel',

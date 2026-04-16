@@ -15,7 +15,15 @@ export class HotelRoomService {
 
   findAvailable() {
     return this.prisma.hotelRoom.findMany({
-      where: { isBooked: false, isReserved: false },
+      where: {
+        isBooked: false,
+        isReserved: false,
+        OR: [
+          { checkoutHoldExpiresAt: null },
+          { checkoutHoldOrderId: null },
+          { checkoutHoldExpiresAt: { lte: new Date() } },
+        ],
+      },
       orderBy: [
         { hotelName: 'asc' },
         { roomType: 'asc' },

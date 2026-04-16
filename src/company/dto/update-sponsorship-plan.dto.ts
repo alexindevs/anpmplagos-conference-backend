@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsString,
   IsInt,
@@ -7,57 +7,124 @@ import {
   IsBoolean,
   IsArray,
   IsOptional,
+  IsNotIn,
+  Min,
 } from 'class-validator';
-import { SponsorTier } from '@prisma/client';
+import {
+  ConferenceDay,
+  SessionSlotDuration,
+  SponsorTier,
+} from '@prisma/client';
+
+const BUNDLE_BOOTH_TIERS = [
+  SponsorTier.gold,
+  SponsorTier.platinum,
+  SponsorTier.headliner,
+] as const;
 
 export class UpdateSponsorshipPlanDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Name of the sponsorship plan',
     example: 'Gold Sponsor Package',
-    required: false,
   })
   @IsString()
   @IsOptional()
   name?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Price in kobo (1 Naira = 100 kobo)',
     example: 500000,
-    required: false,
   })
   @IsInt()
   @IsPositive()
   @IsOptional()
   priceInKobo?: number;
 
-  @ApiProperty({
-    description: 'Sponsorship tier level',
+  @ApiPropertyOptional({
+    description:
+      'Recognition tier for this plan (bronze–headliner). Company baseline tier is separate.',
     enum: SponsorTier,
     example: 'gold',
-    required: false,
   })
   @IsEnum(SponsorTier)
+  @IsNotIn([SponsorTier.default], {
+    message: 'Sponsorship plan tier cannot be default',
+  })
   @IsOptional()
   tier?: SponsorTier;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'List of perks/benefits included in this plan',
-    example: ['Logo on website', 'Booth space', '10 tickets'],
     type: [String],
-    required: false,
   })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
   perks?: string[];
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Whether this plan is active and available for purchase',
     example: true,
-    default: true,
-    required: false,
   })
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Number of conference ticket admits included',
+    example: 1,
+  })
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  ticketAdmits?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'If set, bundle assigns one available booth of this tier at checkout (gold, platinum, or headliner only)',
+    enum: BUNDLE_BOOTH_TIERS,
+  })
+  @IsEnum(SponsorTier)
+  @IsOptional()
+  bundleBoothTier?: SponsorTier;
+
+  @ApiPropertyOptional({ enum: SessionSlotDuration })
+  @IsEnum(SessionSlotDuration)
+  @IsOptional()
+  bundleMasterclassDuration?: SessionSlotDuration;
+
+  @ApiPropertyOptional({ enum: ConferenceDay })
+  @IsEnum(ConferenceDay)
+  @IsOptional()
+  bundleMasterclassDay?: ConferenceDay;
+
+  @ApiPropertyOptional({ enum: SessionSlotDuration })
+  @IsEnum(SessionSlotDuration)
+  @IsOptional()
+  bundlePresentationDuration?: SessionSlotDuration;
+
+  @ApiPropertyOptional({ enum: ConferenceDay })
+  @IsEnum(ConferenceDay)
+  @IsOptional()
+  bundlePresentationDay?: ConferenceDay;
+
+  @ApiPropertyOptional({
+    description:
+      'Replace linked advert slots when provided (empty array clears links)',
+    type: [String],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  advertSlotIds?: string[];
+
+  @ApiPropertyOptional({
+    description:
+      'Replace linked branding slots when provided (empty array clears links)',
+    type: [String],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  brandingSlotIds?: string[];
 }

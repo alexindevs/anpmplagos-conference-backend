@@ -304,20 +304,9 @@ export class RegistrationService {
           primaryContactPhone: companyDto.primaryContactPhone!,
           headerImage: imagePaths?.headerImage,
           logo: imagePaths?.logo,
-          highestSponsorshipTier: 'silver',
+          highestSponsorshipTier: 'default',
         },
       });
-
-      if (companyDto.representatives?.length) {
-        await this.prisma.companyRepresentative.createMany({
-          data: companyDto.representatives.map((r) => ({
-            companyId: company.id,
-            name: r.name,
-            title: r.title,
-            phone: r.phone,
-          })),
-        });
-      }
 
       await this.prisma.user.update({
         where: { id: user.id },

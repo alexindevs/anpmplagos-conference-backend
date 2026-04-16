@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  Company,
+  OrderItem,
   Payment,
   PaymentKind,
   PaymentStatus,
@@ -30,6 +32,16 @@ import {
 import { tierRank } from '../company/company-tier.util';
 import { BoothService } from '../booth/booth.service';
 import { CacheService } from '../cache/cache.service';
+import {
+  CHECKOUT_HOLD_TTL_MS,
+  isBlockedByOtherCheckoutHold,
+} from '../commerce/checkout-hold.util';
+import {
+  parseSponsorshipResolution,
+  SponsorshipBundleResolutionService,
+  type SponsorshipBundleResolutionEntry,
+} from '../sponsorship/sponsorship-bundle-resolution.service';
+import { koboBigInt, koboNumber } from '../common/kobo';
 
 type PaystackInitializeResponse = {
   status: boolean;
@@ -72,6 +84,7 @@ export class PaystackService {
     private readonly config: ConfigService,
     private readonly boothService: BoothService,
     private readonly cacheService: CacheService,
+    private readonly sponsorshipBundleResolution: SponsorshipBundleResolutionService,
   ) {
     this.paystackSecretKey = this.config.get<string>('PAYSTACK_SECRET_KEY', '');
     this.paystackBaseUrl = this.config.get<string>(
@@ -145,6 +158,7 @@ export class PaystackService {
   private callbackUrlFor(
     flow:
       | 'registration'
+      | 'order'
       | 'booth'
       | 'session'
       | 'hotel_room'
@@ -155,6 +169,7 @@ export class PaystackService {
   ): string {
     const envKeys = {
       registration: 'PAYSTACK_CALLBACK_URL_REGISTRATION',
+      order: 'PAYSTACK_CALLBACK_URL_ORDER',
       booth: 'PAYSTACK_CALLBACK_URL_BOOTH',
       session: 'PAYSTACK_CALLBACK_URL_SESSION',
       hotel_room: 'PAYSTACK_CALLBACK_URL_HOTEL_ROOM',
@@ -187,6 +202,11 @@ export class PaystackService {
     return Math.min(percentageFee + 10000, 200000);
   }
 
+  /** Public wrapper for checkout / cart totals (same fee math as legacy inits). */
+  grossAmountForNetBase(baseAmountKobo: number): number {
+    return this.calculateGrossAmountForNet(baseAmountKobo);
+  }
+
   // Small helper to ensure net amount (after Paystack local fee) covers base amount.
   private calculateGrossAmountForNet(baseAmountKobo: number): number {
     let low = baseAmountKobo;
@@ -209,12 +229,23 @@ export class PaystackService {
     return `ANPMP-${kind.toUpperCase()}-${Date.now()}-${randomUUID().slice(0, 8)}`;
   }
 
+  paymentReferenceForKind(kind: PaymentKind): string {
+    return this.generateReference(kind);
+  }
+
+  async releaseOrderCheckoutHolds(orderId: string): Promise<void> {
+    await this.releaseCheckoutHoldsForOrder(orderId);
+  }
+
   private assertPublishedSessionSlotPurchasable(
     slot: {
       status: SessionStatus;
       isReserved: boolean;
       isTaken: boolean;
       takenById: string | null;
+      checkoutHoldExpiresAt?: Date | null;
+      checkoutHoldOrderId?: string | null;
+      checkoutHoldPaymentId?: string | null;
     },
     company: { id: string },
     notPublishedMessage: string,
@@ -225,6 +256,18 @@ export class PaystackService {
     if (slot.isReserved) {
       throw new BadRequestException(
         'This slot is reserved and cannot be purchased',
+      );
+    }
+    if (
+      isBlockedByOtherCheckoutHold(
+        slot.checkoutHoldExpiresAt,
+        slot.checkoutHoldOrderId,
+        slot.checkoutHoldPaymentId ?? null,
+        undefined,
+      )
+    ) {
+      throw new BadRequestException(
+        'This slot is held by another checkout in progress',
       );
     }
     if (slot.isTaken && slot.takenById !== company.id) {
@@ -264,6 +307,29 @@ export class PaystackService {
     if (existing) {
       throw new BadRequestException(
         'There is already a pending payment for this slot',
+      );
+    }
+
+    const slotWhere =
+      kind === 'masterclass'
+        ? { masterclassId: sessionId }
+        : kind === 'panel'
+          ? { panelSessionId: sessionId }
+          : { presentationId: sessionId };
+
+    const pendingOrderLine = await this.prisma.orderItem.findFirst({
+      where: {
+        ...slotWhere,
+        order: {
+          status: 'pending_payment',
+          payments: { some: { kind: 'order', status: 'pending' } },
+        },
+      },
+      select: { id: true },
+    });
+    if (pendingOrderLine) {
+      throw new BadRequestException(
+        'This slot is reserved by another checkout in progress',
       );
     }
   }
@@ -315,13 +381,16 @@ export class PaystackService {
           Authorization: `Bearer ${this.paystackSecretKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email: input.email,
-          amount: input.amount,
-          reference: input.reference,
-          callback_url: input.callbackUrl,
-          metadata: input.metadata,
-        }),
+        body: JSON.stringify(
+          {
+            email: input.email,
+            amount: input.amount,
+            reference: input.reference,
+            callback_url: input.callbackUrl,
+            metadata: input.metadata,
+          },
+          (_key, v) => (typeof v === 'bigint' ? Number(v) : v),
+        ),
       },
     );
 
@@ -369,8 +438,28 @@ export class PaystackService {
     if (!booth) {
       throw new NotFoundException(`Booth ${dto.boothId} not found`);
     }
-    if (booth.isTaken || booth.isReserved) {
+    if (
+      booth.isTaken ||
+      booth.isReserved ||
+      isBlockedByOtherCheckoutHold(
+        booth.checkoutHoldExpiresAt,
+        booth.checkoutHoldOrderId,
+        booth.checkoutHoldPaymentId,
+        undefined,
+      )
+    ) {
       throw new BadRequestException('Booth is not available for purchase');
+    }
+
+    const boothTier = booth.tier;
+    if (
+      boothTier &&
+      boothTier !== SponsorTier.silver &&
+      boothTier !== SponsorTier.bronze
+    ) {
+      throw new BadRequestException(
+        'Only silver or bronze booths can be purchased standalone; higher tiers are assigned via sponsorship bundles',
+      );
     }
 
     const existingPending = await this.prisma.payment.findFirst({
@@ -409,8 +498,8 @@ export class PaystackService {
       data: {
         reference,
         kind: 'booth',
-        baseAmount,
-        amount,
+        baseAmount: koboBigInt(baseAmount),
+        amount: koboBigInt(amount),
         status: 'pending',
         provider: 'paystack',
         providerResponse: paystack as unknown as Prisma.InputJsonValue,
@@ -539,8 +628,8 @@ export class PaystackService {
       data: {
         reference,
         kind,
-        baseAmount,
-        amount,
+        baseAmount: koboBigInt(baseAmount),
+        amount: koboBigInt(amount),
         status: 'pending',
         provider: 'paystack',
         providerResponse: paystack as unknown as Prisma.InputJsonValue,
@@ -589,40 +678,31 @@ export class PaystackService {
       );
     }
 
-    // Companies must have paid for a booth or sponsorship plan before booking hotels
-    if (authUser.regType === 'company' && user.company) {
-      const hasBoothOrSponsorshipPayment = await this.prisma.payment.findFirst({
-        where: {
-          companyId: user.company.id,
-          kind: { in: ['booth', 'sponsorship_plan'] },
-          status: 'success',
-        },
-        select: { id: true },
-      });
-
-      if (!hasBoothOrSponsorshipPayment) {
-        throw new BadRequestException(
-          'Companies must purchase a booth or sponsorship plan before booking hotel rooms',
-        );
-      }
-    }
-
     /** Company accounts may hold multiple room slots; others max one (booked + pending). */
     const canBookMultipleHotelRooms = authUser.regType === 'company';
     if (!canBookMultipleHotelRooms) {
-      const [bookedCount, pendingCount] = await Promise.all([
-        this.prisma.hotelRoom.count({
-          where: { bookedById: user.id, isBooked: true },
-        }),
-        this.prisma.payment.count({
-          where: {
-            userId: user.id,
-            kind: 'hotel_room',
-            status: 'pending',
-          },
-        }),
-      ]);
-      if (bookedCount + pendingCount >= 1) {
+      const [bookedCount, pendingCount, pendingHotelOrderCheckout] =
+        await Promise.all([
+          this.prisma.hotelRoom.count({
+            where: { bookedById: user.id, isBooked: true },
+          }),
+          this.prisma.payment.count({
+            where: {
+              userId: user.id,
+              kind: 'hotel_room',
+              status: 'pending',
+            },
+          }),
+          this.prisma.order.count({
+            where: {
+              userId: user.id,
+              cartKind: 'hotel',
+              status: 'pending_payment',
+              payments: { some: { kind: 'order', status: 'pending' } },
+            },
+          }),
+        ]);
+      if (bookedCount + pendingCount + pendingHotelOrderCheckout >= 1) {
         throw new BadRequestException(
           'You already have a hotel room booking or checkout in progress. Only one room per account (company accounts may book multiple).',
         );
@@ -635,7 +715,16 @@ export class PaystackService {
     if (!room) {
       throw new NotFoundException(`Hotel room ${dto.hotelRoomId} not found`);
     }
-    if (room.isBooked || room.isReserved) {
+    if (
+      room.isBooked ||
+      room.isReserved ||
+      isBlockedByOtherCheckoutHold(
+        room.checkoutHoldExpiresAt,
+        room.checkoutHoldOrderId,
+        room.checkoutHoldPaymentId,
+        undefined,
+      )
+    ) {
       throw new BadRequestException(
         'This room slot is not available for purchase',
       );
@@ -676,8 +765,8 @@ export class PaystackService {
       data: {
         reference,
         kind: 'hotel_room',
-        baseAmount,
-        amount,
+        baseAmount: koboBigInt(baseAmount),
+        amount: koboBigInt(amount),
         status: 'pending',
         provider: 'paystack',
         providerResponse: paystack as unknown as Prisma.InputJsonValue,
@@ -787,8 +876,8 @@ export class PaystackService {
       data: {
         reference,
         kind: 'advert_slot',
-        baseAmount,
-        amount,
+        baseAmount: koboBigInt(baseAmount),
+        amount: koboBigInt(amount),
         status: 'pending',
         provider: 'paystack',
         providerResponse: paystack as unknown as Prisma.InputJsonValue,
@@ -901,8 +990,8 @@ export class PaystackService {
       data: {
         reference,
         kind: 'branding_slot',
-        baseAmount,
-        amount,
+        baseAmount: koboBigInt(baseAmount),
+        amount: koboBigInt(amount),
         status: 'pending',
         provider: 'paystack',
         providerResponse: paystack as unknown as Prisma.InputJsonValue,
@@ -1001,8 +1090,8 @@ export class PaystackService {
       data: {
         reference,
         kind: 'registration',
-        baseAmount,
-        amount,
+        baseAmount: koboBigInt(baseAmount),
+        amount: koboBigInt(amount),
         status: 'pending',
         provider: 'paystack',
         providerResponse: paystack as unknown as Prisma.InputJsonValue,
@@ -1072,51 +1161,98 @@ export class PaystackService {
       );
     }
 
-    const baseAmount = plan.priceInKobo;
+    await this.sponsorshipBundleResolution.assertCheckoutCompatibleWithPlans(
+      this.prisma,
+      {
+        companyId: company.id,
+        lineInputs: [
+          { type: 'sponsorship_plan', sponsorshipPlanId: plan.id },
+        ],
+      },
+    );
+
+    const baseAmount = koboNumber(plan.priceInKobo);
     const amount = this.calculateGrossAmountForNet(baseAmount);
     const reference = this.generateReference('sponsorship_plan');
 
-    const paystack = await this.callPaystackInitialize({
-      email: company.user.email,
-      amount,
-      reference,
-      callbackUrl: this.callbackUrlFor('sponsorship_plan'),
-      metadata: {
-        kind: 'sponsorship_plan',
-        companyId: company.id,
-        sponsorshipPlanId: plan.id,
-        userId: company.userId,
-        baseAmount,
-      },
-    });
-
-    await this.prisma.payment.create({
+    const paymentRow = await this.prisma.payment.create({
       data: {
         reference,
         kind: 'sponsorship_plan',
-        baseAmount,
-        amount,
+        baseAmount: koboBigInt(baseAmount),
+        amount: koboBigInt(amount),
         status: 'pending',
         provider: 'paystack',
-        providerResponse: paystack as unknown as Prisma.InputJsonValue,
+        providerResponse: {} as Prisma.InputJsonValue,
         userId: company.userId,
         companyId: company.id,
         sponsorshipPlanId: plan.id,
       },
     });
 
-    const paystackData = paystack.data;
-    if (!paystackData) {
-      throw new BadRequestException('Invalid Paystack response');
+    try {
+      const expiresAt = new Date(Date.now() + CHECKOUT_HOLD_TTL_MS);
+      await this.prisma.$transaction(async (tx) => {
+        const payload =
+          await this.sponsorshipBundleResolution.resolveForLegacyPaymentInit(
+            tx,
+            {
+              planId: plan.id,
+              paymentId: paymentRow.id,
+              expiresAt,
+            },
+          );
+        await tx.payment.update({
+          where: { id: paymentRow.id },
+          data: {
+            sponsorshipResolution: payload as unknown as Prisma.InputJsonValue,
+          },
+        });
+      });
+    } catch (err) {
+      await this.prisma.payment.delete({ where: { id: paymentRow.id } });
+      throw err;
     }
 
-    return {
-      reference,
-      authorizationUrl: paystackData.authorization_url,
-      accessCode: paystackData.access_code,
-      amount,
-      baseAmount,
-    };
+    try {
+      const paystack = await this.callPaystackInitialize({
+        email: company.user.email,
+        amount,
+        reference,
+        callbackUrl: this.callbackUrlFor('sponsorship_plan'),
+        metadata: {
+          kind: 'sponsorship_plan',
+          companyId: company.id,
+          sponsorshipPlanId: plan.id,
+          userId: company.userId,
+          baseAmount,
+        },
+      });
+
+      await this.prisma.payment.update({
+        where: { id: paymentRow.id },
+        data: {
+          providerResponse: paystack as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      const paystackData = paystack.data;
+      if (!paystackData) {
+        throw new BadRequestException('Invalid Paystack response');
+      }
+
+      return {
+        reference,
+        authorizationUrl: paystackData.authorization_url,
+        accessCode: paystackData.access_code,
+        amount,
+        baseAmount,
+      };
+    } catch (err) {
+      await this.releaseCheckoutHoldsForPayment(paymentRow.id);
+      await this.prisma.payment.delete({ where: { id: paymentRow.id } });
+      throw err;
+    }
   }
 
   async handleWebhook(
@@ -1190,6 +1326,21 @@ export class PaystackService {
         providerResponse: data as unknown as Prisma.InputJsonValue,
       },
     });
+
+    const failed = await this.prisma.payment.findUnique({
+      where: { reference },
+      select: { id: true, orderId: true },
+    });
+    if (failed?.id) {
+      await this.releaseCheckoutHoldsForPayment(failed.id);
+    }
+    if (failed?.orderId) {
+      await this.releaseCheckoutHoldsForOrder(failed.orderId);
+      await this.prisma.order.updateMany({
+        where: { id: failed.orderId, status: 'pending_payment' },
+        data: { status: 'failed' },
+      });
+    }
   }
 
   private async applySuccessfulPayment(
@@ -1238,6 +1389,11 @@ export class PaystackService {
       return;
     }
 
+    if (payment.kind === 'order') {
+      await this.applySuccessfulOrderPayment(payment, paystackData);
+      return;
+    }
+
     if (payment.kind === 'booth') {
       const booth = payment.booth;
       const company = payment.company;
@@ -1261,7 +1417,16 @@ export class PaystackService {
 
       if (
         (booth.isTaken && booth.takenById !== company.id) ||
-        booth.isReserved
+        booth.isReserved ||
+        isBlockedByOtherCheckoutHold(
+          booth.checkoutHoldExpiresAt,
+          booth.checkoutHoldOrderId,
+          booth.checkoutHoldPaymentId,
+          {
+            orderId: payment.orderId,
+            paymentId: payment.id,
+          },
+        )
       ) {
         await this.refundBecauseUnavailable(
           payment,
@@ -1320,6 +1485,24 @@ export class PaystackService {
         );
         return;
       }
+      if (
+        isBlockedByOtherCheckoutHold(
+          session.checkoutHoldExpiresAt,
+          session.checkoutHoldOrderId,
+          session.checkoutHoldPaymentId,
+          {
+            orderId: payment.orderId,
+            paymentId: payment.id,
+          },
+        )
+      ) {
+        await this.refundBecauseUnavailable(
+          payment,
+          paystackData,
+          'Masterclass slot was held by another checkout',
+        );
+        return;
+      }
       if (session.isTaken && session.takenById !== company.id) {
         await this.refundBecauseUnavailable(
           payment,
@@ -1368,6 +1551,24 @@ export class PaystackService {
           payment,
           paystackData,
           'Panel slot was reserved before payment completed',
+        );
+        return;
+      }
+      if (
+        isBlockedByOtherCheckoutHold(
+          session.checkoutHoldExpiresAt,
+          session.checkoutHoldOrderId,
+          session.checkoutHoldPaymentId,
+          {
+            orderId: payment.orderId,
+            paymentId: payment.id,
+          },
+        )
+      ) {
+        await this.refundBecauseUnavailable(
+          payment,
+          paystackData,
+          'Panel slot was held by another checkout',
         );
         return;
       }
@@ -1422,6 +1623,24 @@ export class PaystackService {
         );
         return;
       }
+      if (
+        isBlockedByOtherCheckoutHold(
+          session.checkoutHoldExpiresAt,
+          session.checkoutHoldOrderId,
+          session.checkoutHoldPaymentId,
+          {
+            orderId: payment.orderId,
+            paymentId: payment.id,
+          },
+        )
+      ) {
+        await this.refundBecauseUnavailable(
+          payment,
+          paystackData,
+          'Presentation slot was held by another checkout',
+        );
+        return;
+      }
       if (session.isTaken && session.takenById !== company.id) {
         await this.refundBecauseUnavailable(
           payment,
@@ -1462,7 +1681,28 @@ export class PaystackService {
         return;
       }
 
-      const currentTier = company.highestSponsorshipTier ?? SponsorTier.silver;
+      const parsed = parseSponsorshipResolution(payment.sponsorshipResolution);
+      const bundleEntry =
+        parsed?.bundles.find(
+          (b) => b.sponsorshipPlanId === payment.sponsorshipPlanId,
+        ) ?? parsed?.bundles[0];
+      if (bundleEntry) {
+        const bundleErr = await this.fulfillSponsorshipBundleFromSnapshot(
+          company as Company & { booth: { id: string } | null },
+          bundleEntry,
+          { paymentId: payment.id },
+        );
+        if (bundleErr) {
+          await this.refundBecauseUnavailable(
+            payment,
+            paystackData,
+            bundleErr,
+          );
+          return;
+        }
+      }
+
+      const currentTier = company.highestSponsorshipTier ?? SponsorTier.default;
       const companyData: Prisma.CompanyUpdateInput = {
         sponsorshipPaidTotalKobo: { increment: plan.priceInKobo },
       };
@@ -1473,6 +1713,7 @@ export class PaystackService {
         where: { id: company.id },
         data: companyData,
       });
+      await this.releaseCheckoutHoldsForPayment(payment.id);
       return;
     }
 
@@ -1492,6 +1733,25 @@ export class PaystackService {
           payment,
           paystackData,
           'Room slot was reserved before payment completed',
+        );
+        return;
+      }
+
+      if (
+        isBlockedByOtherCheckoutHold(
+          room.checkoutHoldExpiresAt,
+          room.checkoutHoldOrderId,
+          room.checkoutHoldPaymentId,
+          {
+            orderId: payment.orderId,
+            paymentId: payment.id,
+          },
+        )
+      ) {
+        await this.refundBecauseUnavailable(
+          payment,
+          paystackData,
+          'Room slot was held by another checkout',
         );
         return;
       }
@@ -1543,6 +1803,24 @@ export class PaystackService {
         );
         return;
       }
+      if (
+        isBlockedByOtherCheckoutHold(
+          slot.checkoutHoldExpiresAt,
+          slot.checkoutHoldOrderId,
+          slot.checkoutHoldPaymentId,
+          {
+            orderId: payment.orderId,
+            paymentId: payment.id,
+          },
+        )
+      ) {
+        await this.refundBecauseUnavailable(
+          payment,
+          paystackData,
+          'Advert slot was held by another checkout',
+        );
+        return;
+      }
       if (slot.isTaken && slot.takenById !== company.id) {
         await this.refundBecauseUnavailable(
           payment,
@@ -1582,6 +1860,24 @@ export class PaystackService {
         );
         return;
       }
+      if (
+        isBlockedByOtherCheckoutHold(
+          slot.checkoutHoldExpiresAt,
+          slot.checkoutHoldOrderId,
+          slot.checkoutHoldPaymentId,
+          {
+            orderId: payment.orderId,
+            paymentId: payment.id,
+          },
+        )
+      ) {
+        await this.refundBecauseUnavailable(
+          payment,
+          paystackData,
+          'Branding slot was held by another checkout',
+        );
+        return;
+      }
       if (slot.isTaken && slot.takenById !== company.id) {
         await this.refundBecauseUnavailable(
           payment,
@@ -1603,6 +1899,678 @@ export class PaystackService {
     }
   }
 
+  private async fulfillSponsorshipBundleFromSnapshot(
+    company: Company & { booth: { id: string } | null },
+    bundle: SponsorshipBundleResolutionEntry,
+    exclude: { orderId?: string | null; paymentId?: string | null },
+  ): Promise<string | null> {
+    const clearHold = {
+      checkoutHoldExpiresAt: null as Date | null,
+      checkoutHoldOrderId: null as string | null,
+      checkoutHoldPaymentId: null as string | null,
+    };
+
+    if (bundle.boothId) {
+      const booth = await this.prisma.booth.findUnique({
+        where: { id: bundle.boothId },
+      });
+      if (!booth) {
+        return 'Bundle booth not found';
+      }
+      if (company.booth && company.booth.id !== booth.id) {
+        return 'Company already has another booth';
+      }
+      if (
+        (booth.isTaken && booth.takenById !== company.id) ||
+        booth.isReserved ||
+        isBlockedByOtherCheckoutHold(
+          booth.checkoutHoldExpiresAt,
+          booth.checkoutHoldOrderId,
+          booth.checkoutHoldPaymentId,
+          exclude,
+        )
+      ) {
+        return 'Bundle booth became unavailable';
+      }
+      if (!booth.isTaken || booth.takenById !== company.id) {
+        await this.prisma.booth.update({
+          where: { id: booth.id },
+          data: {
+            isTaken: true,
+            takenById: company.id,
+            ...clearHold,
+          },
+        });
+      }
+      await this.boothService.applyBoothTierToCompany(company.id, booth.tier);
+      await Promise.all([
+        this.cacheService.delPattern('booths:*'),
+        this.cacheService.delPattern('admin:booths:*'),
+        this.cacheService.delPattern('admin:dashboard:*'),
+        this.cacheService.delPattern('public:partners:*'),
+      ]);
+    }
+
+    if (bundle.masterclassId) {
+      const session = await this.prisma.masterclass.findUnique({
+        where: { id: bundle.masterclassId },
+      });
+      if (!session) {
+        return 'Bundle masterclass not found';
+      }
+      if (session.status !== SessionStatus.published) {
+        return 'Bundle masterclass no longer published';
+      }
+      if (session.isReserved) {
+        return 'Bundle masterclass was reserved';
+      }
+      if (session.isTaken && session.takenById !== company.id) {
+        return 'Bundle masterclass was taken by another company';
+      }
+      if (
+        isBlockedByOtherCheckoutHold(
+          session.checkoutHoldExpiresAt,
+          session.checkoutHoldOrderId,
+          session.checkoutHoldPaymentId,
+          exclude,
+        )
+      ) {
+        return 'Bundle masterclass was held by another checkout';
+      }
+      if (!session.isTaken || session.takenById !== company.id) {
+        await this.prisma.masterclass.update({
+          where: { id: session.id },
+          data: {
+            isTaken: true,
+            takenById: company.id,
+            ...clearHold,
+          },
+        });
+      }
+      await this.cacheService.delPattern('admin:dashboard:*');
+    }
+
+    if (bundle.presentationId) {
+      const session = await this.prisma.presentation.findUnique({
+        where: { id: bundle.presentationId },
+      });
+      if (!session) {
+        return 'Bundle presentation not found';
+      }
+      if (session.status !== SessionStatus.published) {
+        return 'Bundle presentation no longer published';
+      }
+      if (session.isReserved) {
+        return 'Bundle presentation was reserved';
+      }
+      if (session.isTaken && session.takenById !== company.id) {
+        return 'Bundle presentation was taken by another company';
+      }
+      if (
+        isBlockedByOtherCheckoutHold(
+          session.checkoutHoldExpiresAt,
+          session.checkoutHoldOrderId,
+          session.checkoutHoldPaymentId,
+          exclude,
+        )
+      ) {
+        return 'Bundle presentation was held by another checkout';
+      }
+      if (!session.isTaken || session.takenById !== company.id) {
+        await this.prisma.presentation.update({
+          where: { id: session.id },
+          data: {
+            isTaken: true,
+            takenById: company.id,
+            ...clearHold,
+          },
+        });
+      }
+      await this.cacheService.delPattern('admin:dashboard:*');
+    }
+
+    for (const advertId of bundle.advertSlotIds) {
+      const slot = await this.prisma.advertSlot.findUnique({
+        where: { id: advertId },
+      });
+      if (!slot) {
+        return 'Bundle advert slot not found';
+      }
+      if (slot.isReserved) {
+        return 'Bundle advert slot was reserved';
+      }
+      if (slot.isTaken && slot.takenById !== company.id) {
+        return 'Bundle advert slot was taken by another company';
+      }
+      if (
+        isBlockedByOtherCheckoutHold(
+          slot.checkoutHoldExpiresAt,
+          slot.checkoutHoldOrderId,
+          slot.checkoutHoldPaymentId,
+          exclude,
+        )
+      ) {
+        return 'Bundle advert slot was held by another checkout';
+      }
+      if (!slot.isTaken || slot.takenById !== company.id) {
+        await this.prisma.advertSlot.update({
+          where: { id: slot.id },
+          data: {
+            isTaken: true,
+            takenById: company.id,
+            ...clearHold,
+          },
+        });
+      }
+    }
+
+    for (const brandingId of bundle.brandingSlotIds) {
+      const slot = await this.prisma.brandingSlot.findUnique({
+        where: { id: brandingId },
+      });
+      if (!slot) {
+        return 'Bundle branding slot not found';
+      }
+      if (slot.isReserved) {
+        return 'Bundle branding slot was reserved';
+      }
+      if (slot.isTaken && slot.takenById !== company.id) {
+        return 'Bundle branding slot was taken by another company';
+      }
+      if (
+        isBlockedByOtherCheckoutHold(
+          slot.checkoutHoldExpiresAt,
+          slot.checkoutHoldOrderId,
+          slot.checkoutHoldPaymentId,
+          exclude,
+        )
+      ) {
+        return 'Bundle branding slot was held by another checkout';
+      }
+      if (!slot.isTaken || slot.takenById !== company.id) {
+        await this.prisma.brandingSlot.update({
+          where: { id: slot.id },
+          data: {
+            isTaken: true,
+            takenById: company.id,
+            ...clearHold,
+          },
+        });
+      }
+    }
+
+    return null;
+  }
+
+  async releaseCheckoutHoldsForPayment(paymentId: string): Promise<void> {
+    const clear = {
+      checkoutHoldExpiresAt: null as Date | null,
+      checkoutHoldOrderId: null as string | null,
+      checkoutHoldPaymentId: null as string | null,
+    };
+    await Promise.all([
+      this.prisma.booth.updateMany({
+        where: { checkoutHoldPaymentId: paymentId },
+        data: clear,
+      }),
+      this.prisma.hotelRoom.updateMany({
+        where: { checkoutHoldPaymentId: paymentId },
+        data: clear,
+      }),
+      this.prisma.masterclass.updateMany({
+        where: { checkoutHoldPaymentId: paymentId },
+        data: clear,
+      }),
+      this.prisma.panelSession.updateMany({
+        where: { checkoutHoldPaymentId: paymentId },
+        data: clear,
+      }),
+      this.prisma.presentation.updateMany({
+        where: { checkoutHoldPaymentId: paymentId },
+        data: clear,
+      }),
+      this.prisma.advertSlot.updateMany({
+        where: { checkoutHoldPaymentId: paymentId },
+        data: clear,
+      }),
+      this.prisma.brandingSlot.updateMany({
+        where: { checkoutHoldPaymentId: paymentId },
+        data: clear,
+      }),
+    ]);
+  }
+
+  private async releaseCheckoutHoldsForOrder(orderId: string): Promise<void> {
+    const clear = {
+      checkoutHoldExpiresAt: null as Date | null,
+      checkoutHoldOrderId: null as string | null,
+      checkoutHoldPaymentId: null as string | null,
+    };
+    await Promise.all([
+      this.prisma.booth.updateMany({
+        where: { checkoutHoldOrderId: orderId },
+        data: clear,
+      }),
+      this.prisma.hotelRoom.updateMany({
+        where: { checkoutHoldOrderId: orderId },
+        data: clear,
+      }),
+      this.prisma.masterclass.updateMany({
+        where: { checkoutHoldOrderId: orderId },
+        data: clear,
+      }),
+      this.prisma.panelSession.updateMany({
+        where: { checkoutHoldOrderId: orderId },
+        data: clear,
+      }),
+      this.prisma.presentation.updateMany({
+        where: { checkoutHoldOrderId: orderId },
+        data: clear,
+      }),
+      this.prisma.advertSlot.updateMany({
+        where: { checkoutHoldOrderId: orderId },
+        data: clear,
+      }),
+      this.prisma.brandingSlot.updateMany({
+        where: { checkoutHoldOrderId: orderId },
+        data: clear,
+      }),
+    ]);
+  }
+
+  private async applySuccessfulOrderPayment(
+    payment: Prisma.PaymentGetPayload<{
+      include: {
+        booth: true;
+        company: { include: { booth: true } };
+        masterclass: true;
+        panelSession: true;
+        presentation: true;
+        hotelRoom: true;
+        sponsorshipPlan: true;
+        advertSlot: true;
+        brandingSlot: true;
+        user: true;
+      };
+    }>,
+    paystackData: Record<string, unknown>,
+  ): Promise<void> {
+    if (!payment.orderId) {
+      await this.markPaymentFailed(
+        payment,
+        paystackData,
+        'Order payment missing orderId',
+      );
+      return;
+    }
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: payment.orderId },
+      include: {
+        items: { orderBy: { createdAt: 'asc' } },
+        company: { include: { booth: true } },
+      },
+    });
+    if (!order) {
+      await this.markPaymentFailed(payment, paystackData, 'Order not found');
+      return;
+    }
+
+    const company = order.company;
+    const needsCompany = order.items.some((i) =>
+      [
+        'booth',
+        'masterclass',
+        'panel',
+        'presentation',
+        'sponsorship_plan',
+        'advert_slot',
+        'branding_slot',
+      ].includes(i.type),
+    );
+    if (needsCompany && !company) {
+      await this.markPaymentFailed(
+        payment,
+        paystackData,
+        'Order requires company profile',
+      );
+      return;
+    }
+
+    for (const item of order.items) {
+      const err = await this.fulfillSingleOrderItem(
+        item,
+        payment,
+        company,
+        order.id,
+      );
+      if (err) {
+        await this.refundBecauseUnavailable(payment, paystackData, err);
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: { status: 'failed' },
+        });
+        return;
+      }
+    }
+
+    await this.releaseCheckoutHoldsForOrder(order.id);
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: { status: 'paid' },
+    });
+  }
+
+  private async fulfillSingleOrderItem(
+    item: OrderItem,
+    payment: Payment,
+    company: (Company & { booth: { id: string } | null }) | null,
+    orderId: string,
+  ): Promise<string | null> {
+    switch (item.type) {
+      case 'booth': {
+        if (!company || !item.boothId) {
+          return 'Missing booth/company';
+        }
+        const booth = await this.prisma.booth.findUnique({
+          where: { id: item.boothId },
+        });
+        if (!booth) {
+          return 'Booth not found';
+        }
+        if (company.booth && company.booth.id !== booth.id) {
+          return 'Company already has another booth';
+        }
+        if (
+          (booth.isTaken && booth.takenById !== company.id) ||
+          booth.isReserved ||
+          isBlockedByOtherCheckoutHold(
+            booth.checkoutHoldExpiresAt,
+            booth.checkoutHoldOrderId,
+            booth.checkoutHoldPaymentId,
+            { orderId },
+          )
+        ) {
+          return 'Booth became unavailable before assignment';
+        }
+        if (!booth.isTaken || booth.takenById !== company.id) {
+          await this.prisma.booth.update({
+            where: { id: booth.id },
+            data: { isTaken: true, takenById: company.id },
+          });
+        }
+        await this.boothService.applyBoothTierToCompany(company.id, booth.tier);
+        await Promise.all([
+          this.cacheService.delPattern('booths:*'),
+          this.cacheService.delPattern('admin:booths:*'),
+          this.cacheService.delPattern('admin:dashboard:*'),
+          this.cacheService.delPattern('public:partners:*'),
+        ]);
+        return null;
+      }
+      case 'masterclass': {
+        if (!company || !item.masterclassId) {
+          return 'Missing masterclass/company';
+        }
+        const session = await this.prisma.masterclass.findUnique({
+          where: { id: item.masterclassId },
+        });
+        if (!session) {
+          return 'Masterclass not found';
+        }
+        if (session.status !== SessionStatus.published) {
+          return 'Masterclass no longer published';
+        }
+        if (session.isReserved) {
+          return 'Masterclass slot was reserved before payment completed';
+        }
+        if (session.isTaken && session.takenById !== company.id) {
+          return 'Masterclass slot was taken by another company';
+        }
+        if (
+          isBlockedByOtherCheckoutHold(
+            session.checkoutHoldExpiresAt,
+            session.checkoutHoldOrderId,
+            session.checkoutHoldPaymentId,
+            { orderId },
+          )
+        ) {
+          return 'Masterclass slot was held by another checkout';
+        }
+        if (!session.isTaken || session.takenById !== company.id) {
+          await this.prisma.masterclass.update({
+            where: { id: session.id },
+            data: { isTaken: true, takenById: company.id },
+          });
+        }
+        await this.cacheService.delPattern('admin:dashboard:*');
+        return null;
+      }
+      case 'panel': {
+        if (!company || !item.panelSessionId) {
+          return 'Missing panel/company';
+        }
+        const session = await this.prisma.panelSession.findUnique({
+          where: { id: item.panelSessionId },
+        });
+        if (!session) {
+          return 'Panel not found';
+        }
+        if (session.status !== SessionStatus.published) {
+          return 'Panel no longer published';
+        }
+        if (session.isReserved) {
+          return 'Panel slot was reserved before payment completed';
+        }
+        if (session.isTaken && session.takenById !== company.id) {
+          return 'Panel slot was taken by another company';
+        }
+        if (
+          isBlockedByOtherCheckoutHold(
+            session.checkoutHoldExpiresAt,
+            session.checkoutHoldOrderId,
+            session.checkoutHoldPaymentId,
+            { orderId },
+          )
+        ) {
+          return 'Panel slot was held by another checkout';
+        }
+        if (!session.isTaken || session.takenById !== company.id) {
+          await this.prisma.panelSession.update({
+            where: { id: session.id },
+            data: { isTaken: true, takenById: company.id },
+          });
+        }
+        await this.cacheService.delPattern('admin:dashboard:*');
+        return null;
+      }
+      case 'presentation': {
+        if (!company || !item.presentationId) {
+          return 'Missing presentation/company';
+        }
+        const session = await this.prisma.presentation.findUnique({
+          where: { id: item.presentationId },
+        });
+        if (!session) {
+          return 'Presentation not found';
+        }
+        if (session.status !== SessionStatus.published) {
+          return 'Presentation slot no longer published';
+        }
+        if (session.isReserved) {
+          return 'Presentation slot was reserved before payment completed';
+        }
+        if (session.isTaken && session.takenById !== company.id) {
+          return 'Presentation slot was taken by another company';
+        }
+        if (
+          isBlockedByOtherCheckoutHold(
+            session.checkoutHoldExpiresAt,
+            session.checkoutHoldOrderId,
+            session.checkoutHoldPaymentId,
+            { orderId },
+          )
+        ) {
+          return 'Presentation slot was held by another checkout';
+        }
+        if (!session.isTaken || session.takenById !== company.id) {
+          await this.prisma.presentation.update({
+            where: { id: session.id },
+            data: { isTaken: true, takenById: company.id },
+          });
+        }
+        return null;
+      }
+      case 'sponsorship_plan': {
+        if (!company || !item.sponsorshipPlanId) {
+          return 'Missing sponsorship plan or company';
+        }
+        const plan = await this.prisma.sponsorshipPlan.findUnique({
+          where: { id: item.sponsorshipPlanId },
+        });
+        if (!plan?.isActive) {
+          return 'Sponsorship plan is no longer active';
+        }
+        const parsed = parseSponsorshipResolution(payment.sponsorshipResolution);
+        const bundleEntry = parsed?.bundles.find(
+          (b) => b.sponsorshipPlanId === item.sponsorshipPlanId,
+        );
+        if (bundleEntry) {
+          const bundleErr = await this.fulfillSponsorshipBundleFromSnapshot(
+            company,
+            bundleEntry,
+            { orderId },
+          );
+          if (bundleErr) {
+            return bundleErr;
+          }
+        }
+        const incrementKobo =
+          BigInt(item.unitBaseAmountKobo) * BigInt(item.quantity);
+        const currentTier = company.highestSponsorshipTier ?? SponsorTier.default;
+        const companyData: Prisma.CompanyUpdateInput = {
+          sponsorshipPaidTotalKobo: { increment: incrementKobo },
+        };
+        if (tierRank(plan.tier) > tierRank(currentTier)) {
+          companyData.highestSponsorshipTier = plan.tier;
+        }
+        await this.prisma.company.update({
+          where: { id: company.id },
+          data: companyData,
+        });
+        return null;
+      }
+      case 'hotel_room': {
+        if (!item.hotelRoomId) {
+          return 'Missing hotel room';
+        }
+        const room = await this.prisma.hotelRoom.findUnique({
+          where: { id: item.hotelRoomId },
+        });
+        if (!room) {
+          return 'Hotel room not found';
+        }
+        if (room.isReserved) {
+          return 'Room slot was reserved before payment completed';
+        }
+        if (
+          isBlockedByOtherCheckoutHold(
+            room.checkoutHoldExpiresAt,
+            room.checkoutHoldOrderId,
+            room.checkoutHoldPaymentId,
+            { orderId },
+          )
+        ) {
+          return 'Room slot is held by another checkout';
+        }
+        if (room.isBooked && room.bookedById !== payment.userId) {
+          return 'Room slot was booked by someone else';
+        }
+        if (!room.isBooked) {
+          await this.prisma.hotelRoom.update({
+            where: { id: room.id },
+            data: { isBooked: true, bookedById: payment.userId },
+          });
+        }
+        await Promise.all([
+          this.cacheService.delPattern('hotel-rooms:*'),
+          this.cacheService.delPattern('admin:dashboard:*'),
+        ]);
+        return null;
+      }
+      case 'advert_slot': {
+        if (!company || !item.advertSlotId) {
+          return 'Missing advert slot or company';
+        }
+        const slot = await this.prisma.advertSlot.findUnique({
+          where: { id: item.advertSlotId },
+        });
+        if (!slot) {
+          return 'Advert slot not found';
+        }
+        if (slot.isReserved) {
+          return 'Advert slot was reserved before payment completed';
+        }
+        if (slot.isTaken && slot.takenById !== company.id) {
+          return 'Advert slot was taken by another company';
+        }
+        if (
+          isBlockedByOtherCheckoutHold(
+            slot.checkoutHoldExpiresAt,
+            slot.checkoutHoldOrderId,
+            slot.checkoutHoldPaymentId,
+            { orderId },
+          )
+        ) {
+          return 'Advert slot was held by another checkout';
+        }
+        if (!slot.isTaken || slot.takenById !== company.id) {
+          await this.prisma.advertSlot.update({
+            where: { id: slot.id },
+            data: { isTaken: true, takenById: company.id },
+          });
+        }
+        return null;
+      }
+      case 'branding_slot': {
+        if (!company || !item.brandingSlotId) {
+          return 'Missing branding slot or company';
+        }
+        const slot = await this.prisma.brandingSlot.findUnique({
+          where: { id: item.brandingSlotId },
+        });
+        if (!slot) {
+          return 'Branding slot not found';
+        }
+        if (slot.isReserved) {
+          return 'Branding slot was reserved before payment completed';
+        }
+        if (slot.isTaken && slot.takenById !== company.id) {
+          return 'Branding slot was taken by another company';
+        }
+        if (
+          isBlockedByOtherCheckoutHold(
+            slot.checkoutHoldExpiresAt,
+            slot.checkoutHoldOrderId,
+            slot.checkoutHoldPaymentId,
+            { orderId },
+          )
+        ) {
+          return 'Branding slot was held by another checkout';
+        }
+        if (!slot.isTaken || slot.takenById !== company.id) {
+          await this.prisma.brandingSlot.update({
+            where: { id: slot.id },
+            data: { isTaken: true, takenById: company.id },
+          });
+        }
+        return null;
+      }
+      default:
+        return 'Unsupported order line type';
+    }
+  }
+
   private async markPaymentFailed(
     payment: Payment,
     payload: Record<string, unknown>,
@@ -1618,6 +2586,14 @@ export class PaystackService {
         } as unknown as Prisma.InputJsonValue,
       },
     });
+    await this.releaseCheckoutHoldsForPayment(payment.id);
+    if (payment.orderId) {
+      await this.releaseCheckoutHoldsForOrder(payment.orderId);
+      await this.prisma.order.updateMany({
+        where: { id: payment.orderId, status: 'pending_payment' },
+        data: { status: 'failed' },
+      });
+    }
   }
 
   private async refundBecauseUnavailable(
@@ -1638,6 +2614,14 @@ export class PaystackService {
         } as unknown as Prisma.InputJsonValue,
       },
     });
+    await this.releaseCheckoutHoldsForPayment(payment.id);
+    if (payment.orderId) {
+      await this.releaseCheckoutHoldsForOrder(payment.orderId);
+      await this.prisma.order.updateMany({
+        where: { id: payment.orderId, status: 'pending_payment' },
+        data: { status: 'failed' },
+      });
+    }
   }
 
   private async requestRefund(reference: string): Promise<boolean> {
@@ -1667,6 +2651,69 @@ export class PaystackService {
       );
       return false;
     }
+  }
+
+  /**
+   * Call Paystack initialize for a pending `Payment` row with `kind: order` (created during cart checkout).
+   */
+  async initializePaystackForOrderPayment(
+    paymentId: string,
+    authUser: AuthUser,
+  ): Promise<{
+    reference: string;
+    authorizationUrl: string;
+    accessCode: string;
+    amount: number;
+    baseAmount: number;
+  }> {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: { user: true },
+    });
+    if (!payment || payment.kind !== 'order' || !payment.orderId) {
+      throw new NotFoundException('Order payment not found');
+    }
+    if (payment.status !== 'pending') {
+      throw new BadRequestException('Payment is not pending');
+    }
+    const isAdmin = authUser.regType === 'admin';
+    if (!isAdmin && payment.userId !== authUser.id) {
+      throw new ForbiddenException('You can only pay for your own order');
+    }
+
+    const paystack = await this.callPaystackInitialize({
+      email: payment.user.email,
+      amount: koboNumber(payment.amount),
+      reference: payment.reference,
+      callbackUrl: this.callbackUrlFor('order'),
+      metadata: {
+        kind: 'order',
+        orderId: payment.orderId,
+        userId: payment.userId,
+        companyId: payment.companyId,
+        baseAmount: koboNumber(payment.baseAmount),
+      },
+    });
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        providerResponse: paystack as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    const paystackData = paystack.data;
+    if (!paystackData) {
+      throw new BadRequestException('Invalid Paystack response');
+    }
+
+    return {
+      reference: payment.reference,
+      authorizationUrl: paystackData.authorization_url,
+      accessCode: paystackData.access_code,
+      amount: koboNumber(payment.amount),
+      baseAmount: koboNumber(payment.baseAmount),
+    };
   }
 
   async verifyPayment(
@@ -1757,6 +2804,7 @@ export class PaystackService {
         orderBy: { createdAt: 'desc' },
         include: {
           user: { select: { id: true, email: true, regType: true } },
+          order: { select: { id: true, cartKind: true, status: true } },
           booth: { select: { id: true, name: true } },
           masterclass: { select: { id: true, title: true } },
           panelSession: { select: { id: true, title: true } },

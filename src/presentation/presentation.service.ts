@@ -48,6 +48,8 @@ export class PresentationService {
         title: dto.title,
         description: dto.description,
         priceInKobo: dto.priceInKobo,
+        slotDuration: dto.slotDuration,
+        conferenceDay: dto.conferenceDay,
       },
       include: {
         takenBy: {
@@ -74,6 +76,12 @@ export class PresentationService {
     if (dto.priceInKobo !== undefined) updateData.priceInKobo = dto.priceInKobo;
     if (dto.status !== undefined) updateData.status = dto.status;
     if (dto.isReserved !== undefined) updateData.isReserved = dto.isReserved;
+    if (dto.slotDuration !== undefined) {
+      updateData.slotDuration = dto.slotDuration;
+    }
+    if (dto.conferenceDay !== undefined) {
+      updateData.conferenceDay = dto.conferenceDay;
+    }
 
     return this.prisma.presentation.update({
       where: { id },

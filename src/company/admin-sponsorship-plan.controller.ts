@@ -40,7 +40,7 @@ export class AdminSponsorshipPlanController {
   @ApiQuery({
     name: 'tier',
     required: false,
-    enum: ['silver', 'gold', 'platinum', 'headliner'],
+    enum: ['bronze', 'silver', 'gold', 'platinum', 'headliner'],
   })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
   async findAll(

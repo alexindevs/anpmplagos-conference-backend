@@ -160,9 +160,12 @@ export class AdminDashboardService {
       },
       sponsorships: {
         companyAccounts: totalCompanies,
-        paidPlanRevenueKobo: sponsorshipPlanRevenue._sum.baseAmount ?? 0,
-        recordedSponsorshipPaidTotalKobo:
+        paidPlanRevenueKobo: Number(
+          sponsorshipPlanRevenue._sum.baseAmount ?? 0,
+        ),
+        recordedSponsorshipPaidTotalKobo: Number(
           companySponsorshipTotals._sum.sponsorshipPaidTotalKobo ?? 0,
+        ),
       },
     };
   }

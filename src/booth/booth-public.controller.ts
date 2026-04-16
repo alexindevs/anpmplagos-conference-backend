@@ -12,9 +12,9 @@ export class BoothPublicController {
 
   @Get('available')
   @ApiOperation({
-    summary: 'List booths available for purchase (public)',
+    summary: 'List booths available for standalone purchase (public)',
     description:
-      'Same data as `GET /api/companies/booths/available`. Use for booking UIs; does not include occupied booths.',
+      'Same data as `GET /api/companies/booths/available`: **silver** and **bronze** tiers only, not taken, not reserved, not held by another checkout. Use for booking UIs.',
   })
   @CacheKey('booths:available')
   listAvailable() {

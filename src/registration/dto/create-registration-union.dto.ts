@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsArray,
   IsBoolean,
   IsEmail,
   IsEnum,
@@ -9,10 +8,7 @@ import {
   IsString,
   MinLength,
   ValidateIf,
-  ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
-import { CreateRepresentativeDto } from './create-representative.dto';
 
 type RegContext = {
   regType?: 'member' | 'attendee' | 'company';
@@ -177,17 +173,4 @@ export class CreateRegistrationDto {
   @IsOptional()
   @IsString()
   boothPreference?: string;
-
-  @ApiProperty({
-    type: [CreateRepresentativeDto],
-    required: false,
-    description:
-      'Optional booth representatives. With multipart/form-data, send `representatives` as a JSON string.',
-  })
-  @ValidateIf((o: RegContext) => o.regType === 'company')
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateRepresentativeDto)
-  representatives?: CreateRepresentativeDto[];
 }

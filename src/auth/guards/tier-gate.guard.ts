@@ -8,7 +8,10 @@ import { Reflector } from '@nestjs/core';
 import { SponsorTier } from '@prisma/client';
 import { AuthUser } from '../auth.service';
 import { CompanyService } from '../../company/company.service';
-import { tierRank } from '../../company/company-tier.util';
+import {
+  effectiveDisplayTier,
+  tierRank,
+} from '../../company/company-tier.util';
 
 export const MIN_TIER_KEY = 'minTier';
 export const MinTier = (tier: SponsorTier) => {
@@ -54,13 +57,13 @@ export class TierGateGuard implements CanActivate {
       throw new ForbiddenException('Company profile not found');
     }
 
-    const effectiveTier = company.highestSponsorshipTier;
+    const effectiveTier = effectiveDisplayTier(company);
     const currentRank = tierRank(effectiveTier);
     const requiredRank = tierRank(minTier);
 
     if (currentRank < requiredRank) {
       throw new ForbiddenException(
-        `This feature requires ${minTier} tier or higher. Current tier: ${effectiveTier || 'none'}`,
+        `This feature requires ${minTier} tier or higher. Current tier: ${effectiveTier}`,
       );
     }
 
