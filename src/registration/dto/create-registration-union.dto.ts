@@ -69,6 +69,7 @@ export class CreateRegistrationDto {
   @ApiProperty({ example: 'ID-123456', required: false })
   @ValidateIf((o: RegContext) => o.regType === 'member')
   @IsString()
+  @IsOptional()
   anpmpId?: string;
 
   @ApiProperty({ example: true, required: false })

@@ -175,7 +175,7 @@ model Member {
   fullName              String
   phone                 String
   bio                   String?
-  anpmpId               String
+  anpmpId               String?
   hasSpouse             Boolean
   spouseName            String?
   spouseEmail           String?

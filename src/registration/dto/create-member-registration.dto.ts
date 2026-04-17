@@ -53,7 +53,8 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
     description: 'ANPMP membership ID',
   })
   @IsString()
-  anpmpId: string;
+  @IsOptional()
+  anpmpId?: string;
 
   @ApiProperty({
     example: true,

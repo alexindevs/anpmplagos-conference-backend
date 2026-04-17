@@ -10,11 +10,14 @@ import { CacheService } from './cache.service';
     NestCacheModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
+        const redisPassword = configService.get<string>('REDIS_PASSWORD');
         const store = await redisStore({
-          host: configService.get('REDIS_HOST', 'localhost'),
-          port: configService.get('REDIS_PORT', 6379),
-          password: configService.get('REDIS_PASSWORD'),
-          db: configService.get('REDIS_DB', 0),
+          host: configService.get<string>('REDIS_HOST', '127.0.0.1'),
+          port: configService.get<number>('REDIS_PORT', 6379),
+          ...(redisPassword?.trim()
+            ? { password: redisPassword.trim() }
+            : {}),
+          db: configService.get<number>('REDIS_DB', 0),
           ttl: 60 * 1000,
         });
         return {

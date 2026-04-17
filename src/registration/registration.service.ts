@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { CreateRegistrationDto } from './dto';
-import { RegType, RegistrationStatus } from '@prisma/client';
+import { Prisma, RegType, RegistrationStatus } from '@prisma/client';
 import { AuthService, type AuthUser } from '../auth/auth.service';
 import { RegistrationFiles } from './registration-files.interface';
 import { RegistrationStorageService } from './registration-storage.service';
@@ -43,6 +43,7 @@ export class RegistrationService {
   }
 
   private async generateUniqueSlug(
+    db: PrismaService | Prisma.TransactionClient,
     model: 'member' | 'attendee' | 'company',
     source: string,
   ): Promise<string> {
@@ -54,16 +55,16 @@ export class RegistrationService {
     while (true) {
       const existing =
         model === 'member'
-          ? await this.prisma.member.findUnique({
+          ? await db.member.findUnique({
               where: { slug: candidate },
               select: { id: true },
             })
           : model === 'attendee'
-            ? await this.prisma.attendee.findUnique({
+            ? await db.attendee.findUnique({
                 where: { slug: candidate },
                 select: { id: true },
               })
-            : await this.prisma.company.findUnique({
+            : await db.company.findUnique({
                 where: { slug: candidate },
                 select: { id: true },
               });
@@ -231,130 +232,124 @@ export class RegistrationService {
     expiresIn?: string;
     user?: AuthUser;
   }> {
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
-    if (existingUser) {
-      throw new ConflictException('Email already registered');
-    }
-
     const hashedPassword = await bcrypt.hash(dto.password, 10);
-
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        password: hashedPassword,
-        regType: dto.regType as RegType,
-        registrationStatus: 'pending_payment',
-      },
-    });
-
-    const imagePaths = files
-      ? await this.storage.saveRegistrationImages(user.id, files)
-      : undefined;
-
-    if (dto.regType === 'member') {
-      const memberDto = dto;
-      const slug = await this.generateUniqueSlug('member', memberDto.fullName!);
-      await this.prisma.member.create({
-        data: {
-          userId: user.id,
-          slug,
-          title: memberDto.title?.trim() || undefined,
-          fullName: memberDto.fullName!,
-          phone: memberDto.phone!,
-          bio: memberDto.bio ?? undefined,
-          anpmpId: memberDto.anpmpId!,
-          hasSpouse: memberDto.hasSpouse!,
-          spouseName: memberDto.spouseName ?? undefined,
-          spouseEmail: memberDto.spouseEmail ?? undefined,
-          spousePhone: memberDto.spousePhone ?? undefined,
-          primarySpecialty: memberDto.primarySpecialty!,
-          hospitalOrg: memberDto.hospitalOrg!,
-          organizationAddress: memberDto.organizationAddress!,
-          zone: memberDto.zone!,
-          avatar: imagePaths?.avatar,
-        },
+    return this.prisma.$transaction(async (tx) => {
+      const existingUser = await tx.user.findUnique({
+        where: { email: dto.email },
       });
-    } else if (dto.regType === 'attendee') {
-      const attendeeDto = dto;
-      const slug = await this.generateUniqueSlug(
-        'attendee',
-        attendeeDto.fullName!,
-      );
-      await this.prisma.attendee.create({
+      if (existingUser) {
+        throw new ConflictException('Email already registered');
+      }
+
+      const user = await tx.user.create({
         data: {
-          userId: user.id,
-          slug,
-          fullName: attendeeDto.fullName!,
-          phone: attendeeDto.phone!,
-          bio: attendeeDto.bio ?? undefined,
-          inMedicalField: attendeeDto.inMedicalField!,
-          primarySpecialty: attendeeDto.primarySpecialty ?? undefined,
-          hospitalOrg: attendeeDto.hospitalOrg ?? undefined,
-          occupation: attendeeDto.occupation ?? undefined,
-          avatar: imagePaths?.avatar,
-        },
-      });
-    } else if (dto.regType === 'company') {
-      const companyDto = dto;
-      const slug = await this.generateUniqueSlug(
-        'company',
-        companyDto.companyName!,
-      );
-      const company = await this.prisma.company.create({
-        data: {
-          userId: user.id,
-          slug,
-          companyName: companyDto.companyName!,
-          tagline: companyDto.tagline ?? undefined,
-          description: companyDto.description!,
-          boothPreference: companyDto.boothPreference ?? undefined,
-          website: companyDto.website ?? undefined,
-          contactEmail: companyDto.contactEmail!,
-          primaryContactName: companyDto.primaryContactName!,
-          primaryContactPhone: companyDto.primaryContactPhone!,
-          headerImage: imagePaths?.headerImage,
-          logo: imagePaths?.logo,
-          highestSponsorshipTier: 'default',
+          email: dto.email,
+          password: hashedPassword,
+          regType: dto.regType as RegType,
+          registrationStatus: 'pending_payment',
         },
       });
 
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { registrationStatus: 'registered' },
-      });
-    } else {
-      const invalidType: string = dto.regType;
-      throw new BadRequestException(`Invalid regType: ${invalidType}`);
-    }
+      const imagePaths = files
+        ? await this.storage.saveRegistrationImages(user.id, files)
+        : undefined;
 
-    const base = {
-      id: user.id,
-      status:
-        dto.regType === 'company'
-          ? 'registered'
-          : this.mapRegistrationStatus(user.registrationStatus),
-      createdAt: user.createdAt,
-      message:
-        dto.regType === 'company'
-          ? 'Company registration successful.'
-          : 'Registration saved. Complete payment to confirm.',
-    };
+      if (dto.regType === 'member') {
+        const memberDto = dto;
+        const slug = await this.generateUniqueSlug(tx, 'member', memberDto.fullName!);
+        await tx.member.create({
+          data: {
+            userId: user.id,
+            slug,
+            title: memberDto.title?.trim() || undefined,
+            fullName: memberDto.fullName!,
+            phone: memberDto.phone!,
+            bio: memberDto.bio ?? undefined,
+            anpmpId: memberDto.anpmpId!,
+            hasSpouse: memberDto.hasSpouse!,
+            spouseName: memberDto.spouseName ?? undefined,
+            spouseEmail: memberDto.spouseEmail ?? undefined,
+            spousePhone: memberDto.spousePhone ?? undefined,
+            primarySpecialty: memberDto.primarySpecialty!,
+            hospitalOrg: memberDto.hospitalOrg!,
+            organizationAddress: memberDto.organizationAddress!,
+            zone: memberDto.zone!,
+            avatar: imagePaths?.avatar,
+          },
+        });
+      } else if (dto.regType === 'attendee') {
+        const attendeeDto = dto;
+        const slug = await this.generateUniqueSlug(
+          tx,
+          'attendee',
+          attendeeDto.fullName!,
+        );
+        await tx.attendee.create({
+          data: {
+            userId: user.id,
+            slug,
+            fullName: attendeeDto.fullName!,
+            phone: attendeeDto.phone!,
+            bio: attendeeDto.bio ?? undefined,
+            inMedicalField: attendeeDto.inMedicalField!,
+            primarySpecialty: attendeeDto.primarySpecialty ?? undefined,
+            hospitalOrg: attendeeDto.hospitalOrg ?? undefined,
+            occupation: attendeeDto.occupation ?? undefined,
+            avatar: imagePaths?.avatar,
+          },
+        });
+      } else if (dto.regType === 'company') {
+        const companyDto = dto;
+        const slug = await this.generateUniqueSlug(
+          tx,
+          'company',
+          companyDto.companyName!,
+        );
+        await tx.company.create({
+          data: {
+            userId: user.id,
+            slug,
+            companyName: companyDto.companyName!,
+            tagline: companyDto.tagline ?? undefined,
+            description: companyDto.description!,
+            boothPreference: companyDto.boothPreference ?? undefined,
+            website: companyDto.website ?? undefined,
+            contactEmail: companyDto.contactEmail!,
+            primaryContactName: companyDto.primaryContactName!,
+            primaryContactPhone: companyDto.primaryContactPhone!,
+            headerImage: imagePaths?.headerImage,
+            logo: imagePaths?.logo,
+            highestSponsorshipTier: 'default',
+          },
+        });
 
-    if (dto.regType === 'company') {
-      const tokens = await this.auth.issueTokensForUserId(user.id);
+        await tx.user.update({
+          where: { id: user.id },
+          data: { registrationStatus: 'registered' },
+        });
+
+        const tokens = await this.auth.issueTokensForUserId(user.id, tx);
+        return {
+          id: user.id,
+          status: 'registered',
+          createdAt: user.createdAt,
+          message: 'Company registration successful.',
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          expiresIn: tokens.expiresIn,
+          user: tokens.user,
+        };
+      } else {
+        const invalidType: string = dto.regType;
+        throw new BadRequestException(`Invalid regType: ${invalidType}`);
+      }
+
       return {
-        ...base,
-        status: 'registered',
-        message: 'Company registration successful.',
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expiresIn: tokens.expiresIn,
-        user: tokens.user,
+        id: user.id,
+        status: this.mapRegistrationStatus(user.registrationStatus),
+        createdAt: user.createdAt,
+        message: 'Registration saved. Complete payment to confirm.',
       };
-    }
-
-    return base;
+    });
   }
 }

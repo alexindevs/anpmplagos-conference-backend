@@ -353,7 +353,7 @@ export class OrderService {
             return {
               ...line,
               unitBaseAmountKobo: applyEarlyBirdDiscountToBigIntKobo(
-                line.unitBaseAmountKobo,
+                koboBigInt(line.unitBaseAmountKobo),
                 discountPct,
               ),
             };

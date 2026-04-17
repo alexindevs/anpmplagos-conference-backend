@@ -11,7 +11,7 @@ import { randomUUID } from 'crypto';
 import { createHash } from 'crypto';
 import type { SignOptions } from 'jsonwebtoken';
 import { LoginDto } from './dto';
-import type { RegType } from '@prisma/client';
+import type { Prisma, RegType } from '@prisma/client';
 
 const DEFAULT_ACCESS_EXPIRY = '15m';
 const DEFAULT_REFRESH_EXPIRY_DAYS = 7;
@@ -75,8 +75,11 @@ export class AuthService {
   }
 
   /** Issue access + refresh tokens (e.g. after company signup). */
-  async issueTokensForUserId(userId: string): Promise<AuthTokens> {
-    const user = await this.prisma.user.findUnique({
+  async issueTokensForUserId(
+    userId: string,
+    db: PrismaService | Prisma.TransactionClient = this.prisma,
+  ): Promise<AuthTokens> {
+    const user = await db.user.findUnique({
       where: { id: userId },
       include: {
         admin: true,
@@ -88,7 +91,7 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    return this.issueTokens(user);
+    return this.issueTokens(user, db);
   }
 
   async refresh(refreshToken: string): Promise<AuthTokens> {
@@ -152,7 +155,9 @@ export class AuthService {
     member?: { id: string; fullName: string } | null;
     attendee?: { id: string; fullName: string } | null;
     company?: { id: string; companyName: string } | null;
-  }): Promise<AuthTokens> {
+    },
+    db: PrismaService | Prisma.TransactionClient = this.prisma,
+  ): Promise<AuthTokens> {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -200,7 +205,7 @@ export class AuthService {
       ) || DEFAULT_REFRESH_EXPIRY_DAYS;
     refreshExpiry.setDate(refreshExpiry.getDate() + refreshDays);
 
-    await this.prisma.refreshToken.create({
+    await db.refreshToken.create({
       data: {
         userId: user.id,
         tokenHash: this.hashToken(refreshToken),

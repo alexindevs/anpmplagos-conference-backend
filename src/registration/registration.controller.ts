@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -154,7 +155,10 @@ export class RegistrationController {
           if (allowed.includes(file.mimetype)) {
             cb(null, true);
           } else {
-            cb(new Error('Only JPEG and PNG images allowed'), false);
+            cb(
+              new BadRequestException('Only JPEG and PNG images allowed'),
+              false,
+            );
           }
         },
       },
