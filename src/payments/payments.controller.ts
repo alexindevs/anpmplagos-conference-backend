@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
@@ -22,6 +23,7 @@ import type { Request } from 'express';
 import { AuthUser } from '../auth/auth.service';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { NonModeratorAdminGuard } from '../auth/guards/non-moderator-admin.guard';
 import {
   InitAdvertSlotPaymentDto,
   InitBoothPaymentDto,
@@ -31,12 +33,16 @@ import {
   InitSessionPaymentDto,
   InitSponsorshipPlanPaymentDto,
 } from './dto';
+import { ManualPaymentService } from './manual-payment.service';
 import { PaystackService } from './paystack.service';
 
 @ApiTags('Payments')
 @Controller('api/payments')
 export class PaymentsController {
-  constructor(private readonly paystackService: PaystackService) {}
+  constructor(
+    private readonly paystackService: PaystackService,
+    private readonly manualPaymentService: ManualPaymentService,
+  ) {}
 
   @Post('registration')
   @UseGuards(JwtAuthGuard)
@@ -201,5 +207,53 @@ export class PaymentsController {
       status,
       reference,
     });
+  }
+
+  @Delete(':reference')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Cancel a pending payment (owner or admin). Required before re-initiating a new payment.',
+  })
+  async cancelPendingPayment(
+    @Param('reference') reference: string,
+    @Req() req: Request & { user: AuthUser },
+  ) {
+    await this.manualPaymentService.cancelPendingPayment(reference, req.user);
+    return { message: 'Payment cancelled successfully' };
+  }
+
+  @Post(':reference/claim-paid')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'User confirms they have made the bank transfer for a pending manual payment. Notifies admins.',
+  })
+  async claimPaymentMade(
+    @Param('reference') reference: string,
+    @Req() req: Request & { user: AuthUser },
+  ) {
+    await this.manualPaymentService.claimPaymentMade(reference, req.user);
+    return {
+      message:
+        'Payment claim received. An admin will verify and confirm your payment shortly.',
+    };
+  }
+
+  @Post('admin/:reference/verify')
+  @UseGuards(JwtAuthGuard, AdminGuard, NonModeratorAdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Admin verifies a manual payment and triggers fulfillment (superadmin and support only).',
+  })
+  async adminVerifyManualPayment(
+    @Param('reference') reference: string,
+    @Req() req: Request & { user: AuthUser },
+  ) {
+    await this.manualPaymentService.adminVerifyPayment(reference, req.user);
+    return { message: 'Payment verified and fulfillment applied successfully' };
   }
 }

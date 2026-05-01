@@ -27,6 +27,10 @@ import { ConferenceProfileModule } from './conference-profile/conference-profile
 import { EventPassModule } from './event-pass/event-pass.module';
 import { CacheModule } from './cache/cache.module';
 import { CommerceModule } from './commerce/commerce.module';
+import { AttendanceModule } from './attendance/attendance.module';
+import { ConferenceDayModule } from './conference-day/conference-day.module';
+import { ReceiptsModule } from './receipts/receipts.module';
+import { ElectionsModule } from './elections/elections.module';
 import { KoboMoneySerializeInterceptor } from './common/kobo-money-serialize.interceptor';
 
 @Module({
@@ -56,6 +60,10 @@ import { KoboMoneySerializeInterceptor } from './common/kobo-money-serialize.int
     ConferenceProfileModule,
     EventPassModule,
     CommerceModule,
+    AttendanceModule,
+    ConferenceDayModule,
+    ReceiptsModule,
+    ElectionsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

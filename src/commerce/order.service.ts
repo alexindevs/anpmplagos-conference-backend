@@ -383,7 +383,10 @@ export class OrderService {
     if (baseTotal <= 0) {
       throw new BadRequestException('Unable to compute order total');
     }
-    const grossTotal = this.paystack.grossAmountForNetBase(baseTotal);
+    const isManual = this.paystack.isManualMode();
+    const chargedTotal = isManual
+      ? baseTotal
+      : this.paystack.grossAmountForNetBase(baseTotal);
     const reference = this.paystack.paymentReferenceForKind('order');
 
     const expiresAt = new Date(Date.now() + CHECKOUT_HOLD_TTL_MS);
@@ -420,9 +423,9 @@ export class OrderService {
             reference,
             kind: 'order',
             baseAmount: koboBigInt(baseTotal),
-            amount: koboBigInt(grossTotal),
+            amount: koboBigInt(chargedTotal),
             status: 'pending',
-            provider: 'paystack',
+            provider: isManual ? 'manual' : 'paystack',
             providerResponse: {} as Prisma.InputJsonValue,
             userId,
             companyId,
@@ -439,6 +442,11 @@ export class OrderService {
         return { orderId: order.id, paymentId: payment.id };
       },
     );
+
+    if (isManual) {
+      await this.prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+      return { orderId, reference, manualMode: true, baseAmount: baseTotal };
+    }
 
     try {
       const init = await this.paystack.initializePaystackForOrderPayment(

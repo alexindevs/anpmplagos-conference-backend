@@ -15,6 +15,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../auth/guards/admin.guard';
 import type { AuthUser } from '../auth/auth.service';
 import { EventPassService } from './event-pass.service';
 
@@ -204,5 +205,16 @@ export class EventPassController {
       userId: u.id,
       companyId: u.company?.id,
     });
+  }
+
+  @Post('admin/regenerate-conference-qrs')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'One-time migration: regenerate all conference QR codes to new URL format',
+  })
+  @ApiResponse({ status: 200, description: 'Returns count of updated passes' })
+  async regenerateConferenceQRs() {
+    return this.eventPassService.regenerateAllConferenceQRCodes();
   }
 }

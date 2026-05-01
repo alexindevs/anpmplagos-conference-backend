@@ -121,24 +121,28 @@ enum EventPassType {
 }
 
 model User {
-  id                 String             @id @default(cuid())
-  email              String             @unique
-  password           String
-  regType            RegType
-  registrationStatus RegistrationStatus @default(pending_payment)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  member             Member?
-  attendee           Attendee?
-  company            Company?
-  admin              Admin?
-  refreshTokens      RefreshToken[]
-  payments           Payment[]
-  carts              Cart[]
-  orders             Order[]
-  hotelRoomsBooked   HotelRoom[]        @relation("HotelRoomBooking")
-  supportTickets     SupportTicket[]
-  eventPasses        EventPass[]
+  id                   String             @id @default(cuid())
+  email                String             @unique
+  password             String
+  regType              RegType
+  registrationStatus   RegistrationStatus @default(pending_payment)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  member               Member?
+  attendee             Attendee?
+  company              Company?
+  admin                Admin?
+  refreshTokens        RefreshToken[]
+  payments             Payment[]
+  carts                Cart[]
+  orders               Order[]
+  hotelRoomsBooked     HotelRoom[]        @relation("HotelRoomBooking")
+  supportTickets       SupportTicket[]
+  eventPasses          EventPass[]
+  attendanceAsDelegate AttendanceRecord[]    @relation("DelegateAttendance")
+  attendanceMarked     AttendanceRecord[]    @relation("ModeratorMarked")
+  passwordResetTokens  PasswordResetToken[]
+  votes                Vote[]
 }
 
 model RefreshToken {
@@ -164,6 +168,7 @@ model Admin {
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   supportTicketResponses SupportTicketResponse[]
+  votingSettingsUpdates  VotingSettings[]
 }
 
 model Member {
@@ -634,6 +639,7 @@ model Payment {
   order             Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
   sponsorshipResolution Json?
   paidAt            DateTime?
+  claimedPaidAt     DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
@@ -757,5 +763,119 @@ model EventPass {
   updatedAt DateTime      @updatedAt
 
   @@unique([userId, type])
+  @@index([userId])
+}
+
+/// Pending invite for a new attendance moderator account.
+model ModeratorInvite {
+  id        String    @id @default(cuid())
+  email     String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@index([email])
+}
+
+/// Short-lived token used to reset a user's password (expires in 1 hour).
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/// A single calendar day of the conference during which attendance can be marked.
+model EventDay {
+  id          String             @id @default(cuid())
+  label       String
+  date        DateTime
+  isActive    Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  attendances AttendanceRecord[]
+
+  @@index([date])
+  @@index([isActive])
+}
+
+/// One entry slot used by a delegate on a conference day.
+model AttendanceRecord {
+  id           String    @id @default(cuid())
+  userId       String
+  eventDayId   String
+  markedById   String
+  entryIndex   Int
+  markedAt     DateTime  @default(now())
+
+  user         User      @relation("DelegateAttendance", fields: [userId], references: [id], onDelete: Cascade)
+  eventDay     EventDay  @relation(fields: [eventDayId], references: [id], onDelete: Cascade)
+  markedBy     User      @relation("ModeratorMarked", fields: [markedById], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventDayId, entryIndex])
+  @@index([userId, eventDayId])
+  @@index([eventDayId])
+  @@index([markedById])
+}
+
+// ─── Elections ───────────────────────────────────────────────────────────────
+
+model VotingSettings {
+  id            String    @id @default(cuid())
+  isActive      Boolean   @default(false)
+  activatedAt   DateTime?
+  deactivatedAt DateTime?
+  updatedAt     DateTime  @updatedAt
+  updatedById   String?
+  updatedBy     Admin?    @relation(fields: [updatedById], references: [id])
+}
+
+model ElectionPosition {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  order       Int         @default(0)
+  isActive    Boolean     @default(true)
+  candidates  Candidate[]
+  votes       Vote[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Candidate {
+  id         String           @id @default(cuid())
+  name       String
+  bio        String?
+  avatar     String?
+  positionId String
+  position   ElectionPosition @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  votes      Vote[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@index([positionId])
+}
+
+model Vote {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  positionId  String
+  position    ElectionPosition @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  candidateId String
+  candidate   Candidate        @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime         @default(now())
+
+  @@unique([userId, positionId])
+  @@index([positionId])
   @@index([userId])
 }

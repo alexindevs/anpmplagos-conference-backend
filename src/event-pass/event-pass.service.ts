@@ -51,7 +51,7 @@ export class EventPassService {
     const qrCodeUrl = await this.generateAndUploadQRCode(
       userId,
       'conference',
-      `${this.frontendUrl}/conference/${userId}`,
+      `${this.frontendUrl}/moderator/scan/${userId}`,
     );
 
     await this.prisma.eventPass.create({
@@ -393,6 +393,37 @@ export class EventPassService {
         'You must have at least one hotel room booking to generate a hotel pass',
       );
     }
+  }
+
+  /**
+   * One-time migration: regenerate all existing conference QR codes to use
+   * the new /moderator/scan/{userId} URL. Call once after deploy.
+   */
+  async regenerateAllConferenceQRCodes(): Promise<{ updated: number }> {
+    const passes = await this.prisma.eventPass.findMany({
+      where: { type: 'conference' },
+      select: { id: true, userId: true },
+    });
+
+    let updated = 0;
+    for (const pass of passes) {
+      try {
+        const newUrl = await this.generateAndUploadQRCode(
+          pass.userId,
+          'conference',
+          `${this.frontendUrl}/moderator/scan/${pass.userId}`,
+        );
+        await this.prisma.eventPass.update({
+          where: { id: pass.id },
+          data: { qrCodeUrl: newUrl },
+        });
+        updated++;
+      } catch {
+        // Continue on individual failures
+      }
+    }
+
+    return { updated };
   }
 
   private async generateAndUploadQRCode(

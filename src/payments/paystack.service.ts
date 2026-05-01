@@ -87,6 +87,7 @@ export class PaystackService {
   private readonly paystackBaseUrl: string;
   /** Fallback when a flow-specific callback env is unset */
   private readonly defaultCallbackUrl: string;
+  private readonly manualPaymentMode: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -104,6 +105,12 @@ export class PaystackService {
       'PAYSTACK_CALLBACK_URL',
       'http://localhost:3000/payment/callback',
     );
+    this.manualPaymentMode =
+      this.config.get<string>('PAYMENT_MODE', 'paystack') === 'manual';
+  }
+
+  isManualMode(): boolean {
+    return this.manualPaymentMode;
   }
 
   /**
@@ -487,9 +494,27 @@ export class PaystackService {
 
     const pct = getEarlyBirdDiscountPercent();
     const baseAmount = applyEarlyBirdDiscountToIntKobo(booth.price, pct);
-    const amount = this.calculateGrossAmountForNet(baseAmount);
     const reference = this.generateReference('booth');
 
+    if (this.manualPaymentMode) {
+      await this.prisma.payment.create({
+        data: {
+          reference,
+          kind: 'booth',
+          baseAmount: koboBigInt(baseAmount),
+          amount: koboBigInt(baseAmount),
+          status: 'pending',
+          provider: 'manual',
+          providerResponse: {} as Prisma.InputJsonValue,
+          userId: company.userId,
+          companyId: company.id,
+          boothId: booth.id,
+        },
+      });
+      return { reference, manualMode: true, baseAmount } as any;
+    }
+
+    const amount = this.calculateGrossAmountForNet(baseAmount);
     const paystack = await this.callPaystackInitialize({
       email: company.user.email,
       amount,
@@ -615,9 +640,29 @@ export class PaystackService {
       presentationId = session.id;
     }
 
-    const amount = this.calculateGrossAmountForNet(baseAmount);
     const reference = this.generateReference(kind);
 
+    if (this.manualPaymentMode) {
+      await this.prisma.payment.create({
+        data: {
+          reference,
+          kind,
+          baseAmount: koboBigInt(baseAmount),
+          amount: koboBigInt(baseAmount),
+          status: 'pending',
+          provider: 'manual',
+          providerResponse: {} as Prisma.InputJsonValue,
+          userId: company.userId,
+          companyId: company.id,
+          masterclassId,
+          panelSessionId,
+          presentationId,
+        },
+      });
+      return { reference, manualMode: true, baseAmount } as any;
+    }
+
+    const amount = this.calculateGrossAmountForNet(baseAmount);
     const paystack = await this.callPaystackInitialize({
       email: company.user.email,
       amount,
@@ -755,9 +800,26 @@ export class PaystackService {
     }
 
     const baseAmount = room.price;
-    const amount = this.calculateGrossAmountForNet(baseAmount);
     const reference = this.generateReference('hotel_room');
 
+    if (this.manualPaymentMode) {
+      await this.prisma.payment.create({
+        data: {
+          reference,
+          kind: 'hotel_room',
+          baseAmount: koboBigInt(baseAmount),
+          amount: koboBigInt(baseAmount),
+          status: 'pending',
+          provider: 'manual',
+          providerResponse: {} as Prisma.InputJsonValue,
+          userId: user.id,
+          hotelRoomId: room.id,
+        },
+      });
+      return { reference, manualMode: true, baseAmount } as any;
+    }
+
+    const amount = this.calculateGrossAmountForNet(baseAmount);
     const paystack = await this.callPaystackInitialize({
       email: user.email,
       amount,
@@ -866,9 +928,27 @@ export class PaystackService {
     }
 
     const baseAmount = slot.price;
-    const amount = this.calculateGrossAmountForNet(baseAmount);
     const reference = this.generateReference('advert_slot');
 
+    if (this.manualPaymentMode) {
+      await this.prisma.payment.create({
+        data: {
+          reference,
+          kind: 'advert_slot',
+          baseAmount: koboBigInt(baseAmount),
+          amount: koboBigInt(baseAmount),
+          status: 'pending',
+          provider: 'manual',
+          providerResponse: {} as Prisma.InputJsonValue,
+          userId: company.userId,
+          companyId: company.id,
+          advertSlotId: slot.id,
+        },
+      });
+      return { reference, manualMode: true, baseAmount } as any;
+    }
+
+    const amount = this.calculateGrossAmountForNet(baseAmount);
     const paystack = await this.callPaystackInitialize({
       email: company.user.email,
       amount,
@@ -981,9 +1061,27 @@ export class PaystackService {
     }
 
     const baseAmount = slot.price;
-    const amount = this.calculateGrossAmountForNet(baseAmount);
     const reference = this.generateReference('branding_slot');
 
+    if (this.manualPaymentMode) {
+      await this.prisma.payment.create({
+        data: {
+          reference,
+          kind: 'branding_slot',
+          baseAmount: koboBigInt(baseAmount),
+          amount: koboBigInt(baseAmount),
+          status: 'pending',
+          provider: 'manual',
+          providerResponse: {} as Prisma.InputJsonValue,
+          userId: company.userId,
+          companyId: company.id,
+          brandingSlotId: slot.id,
+        },
+      });
+      return { reference, manualMode: true, baseAmount } as any;
+    }
+
+    const amount = this.calculateGrossAmountForNet(baseAmount);
     const paystack = await this.callPaystackInitialize({
       email: company.user.email,
       amount,
@@ -1083,10 +1181,25 @@ export class PaystackService {
     }
     const pct = getEarlyBirdDiscountPercent();
     const baseAmount = applyEarlyBirdDiscountToIntKobo(rawBase, pct);
-
-    const amount = this.calculateGrossAmountForNet(baseAmount);
     const reference = this.generateReference('registration');
 
+    if (this.manualPaymentMode) {
+      await this.prisma.payment.create({
+        data: {
+          reference,
+          kind: 'registration',
+          baseAmount: koboBigInt(baseAmount),
+          amount: koboBigInt(baseAmount),
+          status: 'pending',
+          provider: 'manual',
+          providerResponse: {} as Prisma.InputJsonValue,
+          userId: user.id,
+        },
+      });
+      return { reference, manualMode: true, baseAmount } as any;
+    }
+
+    const amount = this.calculateGrossAmountForNet(baseAmount);
     const paystack = await this.callPaystackInitialize({
       email: user.email,
       amount,
@@ -1193,9 +1306,47 @@ export class PaystackService {
     const baseAmount = koboNumber(
       applyEarlyBirdDiscountToBigIntKobo(plan.priceInKobo, pct),
     );
-    const amount = this.calculateGrossAmountForNet(baseAmount);
     const reference = this.generateReference('sponsorship_plan');
+    const expiresAt = new Date(Date.now() + CHECKOUT_HOLD_TTL_MS);
 
+    if (this.manualPaymentMode) {
+      const paymentRow = await this.prisma.payment.create({
+        data: {
+          reference,
+          kind: 'sponsorship_plan',
+          baseAmount: koboBigInt(baseAmount),
+          amount: koboBigInt(baseAmount),
+          status: 'pending',
+          provider: 'manual',
+          providerResponse: {} as Prisma.InputJsonValue,
+          userId: company.userId,
+          companyId: company.id,
+          sponsorshipPlanId: plan.id,
+        },
+      });
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const payload =
+            await this.sponsorshipBundleResolution.resolveForLegacyPaymentInit(
+              tx,
+              { planId: plan.id, paymentId: paymentRow.id, expiresAt },
+            );
+          await tx.payment.update({
+            where: { id: paymentRow.id },
+            data: {
+              sponsorshipResolution:
+                payload as unknown as Prisma.InputJsonValue,
+            },
+          });
+        });
+      } catch (err) {
+        await this.prisma.payment.delete({ where: { id: paymentRow.id } });
+        throw err;
+      }
+      return { reference, manualMode: true, baseAmount } as any;
+    }
+
+    const amount = this.calculateGrossAmountForNet(baseAmount);
     const paymentRow = await this.prisma.payment.create({
       data: {
         reference,
@@ -1212,7 +1363,6 @@ export class PaystackService {
     });
 
     try {
-      const expiresAt = new Date(Date.now() + CHECKOUT_HOLD_TTL_MS);
       await this.prisma.$transaction(async (tx) => {
         const payload =
           await this.sponsorshipBundleResolution.resolveForLegacyPaymentInit(
@@ -1364,7 +1514,7 @@ export class PaystackService {
     }
   }
 
-  private async applySuccessfulPayment(
+  async applySuccessfulPayment(
     paymentId: string,
     paystackData: Record<string, unknown>,
   ): Promise<void> {
@@ -2159,7 +2309,7 @@ export class PaystackService {
     ]);
   }
 
-  private async releaseCheckoutHoldsForOrder(orderId: string): Promise<void> {
+  async releaseCheckoutHoldsForOrder(orderId: string): Promise<void> {
     const clear = {
       checkoutHoldExpiresAt: null as Date | null,
       checkoutHoldOrderId: null as string | null,

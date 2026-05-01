@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -220,6 +221,157 @@ export class AuthService {
       user: authUser,
     };
   }
+
+  // ─── Password Reset Flow ─────────────────────────────────────────────────
+
+  async forgotPassword(
+    email: string,
+    sendEmail: (opts: { to: string; resetUrl: string }) => Promise<void>,
+    frontendUrl: string,
+  ): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+
+    // Always return the same message to avoid leaking whether an account exists.
+    const genericMessage =
+      'If an account with that email exists, a password reset link has been sent.';
+
+    if (!user) return { message: genericMessage };
+
+    // Invalidate any previous unused tokens for this user.
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    const rawToken = randomUUID();
+    const tokenHash = this.hashToken(rawToken);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await this.prisma.passwordResetToken.create({
+      data: { userId: user.id, tokenHash, expiresAt },
+    });
+
+    const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
+    await sendEmail({ to: email, resetUrl });
+
+    return { message: genericMessage };
+  }
+
+  async validateResetToken(
+    token: string,
+  ): Promise<{ email: string }> {
+    const record = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash: this.hashToken(token) },
+      include: { user: { select: { email: true } } },
+    });
+
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new BadRequestException('This reset link is invalid or has expired.');
+    }
+
+    return { email: record.user.email };
+  }
+
+  async resetPassword(
+    token: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const record = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash: this.hashToken(token) },
+    });
+
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new BadRequestException('This reset link is invalid or has expired.');
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { password: hashed },
+      }),
+      // Mark token used
+      this.prisma.passwordResetToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+      // Revoke all refresh tokens so existing sessions must re-login
+      this.prisma.refreshToken.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    return { message: 'Password reset successfully. You can now log in with your new password.' };
+  }
+
+  // ─── Moderator Invite Flow ───────────────────────────────────────────────
+
+  async validateModeratorInvite(
+    token: string,
+  ): Promise<{ email: string; expiresAt: Date }> {
+    const invite = await this.prisma.moderatorInvite.findUnique({
+      where: { token },
+    });
+
+    if (!invite) throw new BadRequestException('Invalid invite token');
+    if (invite.usedAt) throw new BadRequestException('This invite has already been used');
+    if (invite.expiresAt < new Date())
+      throw new BadRequestException('This invite has expired');
+
+    return { email: invite.email, expiresAt: invite.expiresAt };
+  }
+
+  async registerModerator(
+    token: string,
+    password: string,
+  ): Promise<AuthTokens> {
+    const invite = await this.prisma.moderatorInvite.findUnique({
+      where: { token },
+    });
+
+    if (!invite) throw new BadRequestException('Invalid invite token');
+    if (invite.usedAt) throw new BadRequestException('This invite has already been used');
+    if (invite.expiresAt < new Date())
+      throw new BadRequestException('This invite has expired');
+
+    const existing = await this.prisma.user.findUnique({
+      where: { email: invite.email },
+    });
+    if (existing) throw new BadRequestException('An account already exists for this email');
+
+    const hashed = await bcrypt.hash(password, 10);
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email: invite.email,
+          password: hashed,
+          regType: 'admin',
+          registrationStatus: 'registered',
+          admin: {
+            create: {
+              name: invite.email.split('@')[0],
+              adminType: 'moderator',
+            },
+          },
+        },
+        include: { admin: true, member: true, attendee: true, company: true },
+      });
+
+      await tx.moderatorInvite.update({
+        where: { id: invite.id },
+        data: { usedAt: new Date() },
+      });
+
+      return newUser;
+    });
+
+    return this.issueTokens(user);
+  }
+
+  // ─── Validate JWT User ────────────────────────────────────────────────────
 
   async validateUser(payload: JwtPayload): Promise<AuthUser | null> {
     const user = await this.prisma.user.findUnique({

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: Arial, sans-serif; color: #333; font-size: 15px; }
+    .container { max-width: 600px; margin: 0 auto; padding: 32px 24px; }
+    h2 { color: #1a1a1a; }
+    table { width: 100%; border-collapse: collapse; margin: 24px 0; }
+    td { padding: 10px 12px; border: 1px solid #ddd; }
+    td:first-child { font-weight: bold; width: 40%; background: #f9f9f9; }
+    .cta { display: inline-block; margin-top: 24px; padding: 12px 28px; background: #1d6f42; color: #fff; text-decoration: none; border-radius: 4px; font-weight: bold; }
+    .footer { margin-top: 40px; font-size: 13px; color: #888; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Manual Payment Claimed – Action Required</h2>
+    <p>A user has confirmed that they have made a bank transfer and is awaiting your verification.</p>
+
+    <table>
+      <tr><td>Name</td><td>{{userName}}</td></tr>
+      <tr><td>Email</td><td>{{userEmail}}</td></tr>
+      <tr><td>Payment Reference</td><td>{{reference}}</td></tr>
+      <tr><td>Payment Type</td><td>{{paymentKind}}</td></tr>
+      <tr><td>Amount</td><td>{{baseAmountNgn}}</td></tr>
+      <tr><td>Claimed At</td><td>{{claimedAt}}</td></tr>
+    </table>
+
+    <p>
+      Please log in to the admin dashboard, locate this payment under
+      <strong>Payments → Pending</strong>, confirm receipt of the transfer,
+      and click <strong>Verify Payment</strong>.
+    </p>
+
+    <div class="footer">
+      ANPMP AGM/Scientific Conference &mdash; Admin Notification
+    </div>
+  </div>
+</body>
+</html>

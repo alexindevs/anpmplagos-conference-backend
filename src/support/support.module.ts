@@ -52,7 +52,7 @@ const supportMailerLogger = new Logger('SupportMailer');
             ? {
                 host,
                 port,
-                secure,
+                // secure,
                 auth: { user, pass },
               }
             : {
@@ -83,6 +83,6 @@ const supportMailerLogger = new Logger('SupportMailer');
   ],
   controllers: [SupportTicketController, AdminSupportTicketController],
   providers: [SupportTicketService, SupportEmailService],
-  exports: [SupportTicketService],
+  exports: [SupportTicketService, SupportEmailService],
 })
 export class SupportModule {}
