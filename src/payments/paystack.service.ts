@@ -358,11 +358,17 @@ export class PaystackService {
       this.config.get<string>('PAYSTACK_WEBHOOK_SECRET_ENABLED', 'true') !==
       'false';
 
-    if (!this.paystackSecretKey || !webhookSigEnabled) {
+    if (!webhookSigEnabled) {
       this.logger.warn(
-        'PAYSTACK_SECRET_KEY/signature verification disabled, allowing webhook payload',
+        'Webhook signature verification disabled via PAYSTACK_WEBHOOK_SECRET_ENABLED=false',
       );
       return true;
+    }
+
+    if (!this.paystackSecretKey) {
+      throw new Error(
+        'PAYSTACK_SECRET_KEY is not configured; cannot verify webhook signatures',
+      );
     }
 
     if (!signature) {

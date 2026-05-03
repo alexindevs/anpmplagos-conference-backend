@@ -1,10 +1,14 @@
 import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JwtModule } from '@nestjs/jwt';
 import type { SignOptions } from 'jsonwebtoken';
 import { PassportModule } from '@nestjs/passport';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { WinstonModule } from 'nest-winston';
+import { envValidationSchema } from './config/env.validation';
+import { winstonConfig } from './logger/winston.config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AdminModule } from './admin/admin.module';
@@ -38,7 +42,13 @@ import { KoboMoneySerializeInterceptor } from './common/kobo-money-serialize.int
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      validationSchema: envValidationSchema,
+      validationOptions: { abortEarly: false },
     }),
+    WinstonModule.forRoot(winstonConfig),
+    ThrottlerModule.forRoot([
+      { name: 'default', ttl: 60_000, limit: 120 },
+    ]),
     ScheduleModule.forRoot(),
     CacheModule,
     PrismaModule,
@@ -68,7 +78,7 @@ import { KoboMoneySerializeInterceptor } from './common/kobo-money-serialize.int
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'fallback-secret-change-me'),
+        secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
           expiresIn: (config.get('JWT_EXPIRES_IN', '7d') ??
             '7d') as SignOptions['expiresIn'],
@@ -80,6 +90,7 @@ import { KoboMoneySerializeInterceptor } from './common/kobo-money-serialize.int
   controllers: [AppController],
   providers: [
     AppService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     {
       provide: APP_INTERCEPTOR,
       useClass: KoboMoneySerializeInterceptor,

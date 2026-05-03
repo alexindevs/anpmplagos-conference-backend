@@ -17,7 +17,7 @@ import { SupportModule } from '../support/support.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'fallback-secret-change-me'),
+        secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
           expiresIn: (config.get('JWT_EXPIRES_IN', '7d') ??
             '7d') as SignOptions['expiresIn'],
