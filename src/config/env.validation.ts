@@ -40,7 +40,7 @@ export const envValidationSchema = Joi.object({
   SUPPORT_EMAILS: Joi.string().optional().allow(''),
   SUPPORT_EMAIL_FROM: Joi.string().optional().allow(''),
   SUPPORT_SMTP_HOST: Joi.string().optional().allow(''),
-  SUPPORT_SMTP_PORT: Joi.number().optional(),
+  SUPPORT_SMTP_PORT: Joi.string().optional().allow(''),
   SUPPORT_SMTP_USER: Joi.string().optional().allow(''),
   SUPPORT_SMTP_PASS: Joi.string().optional().allow(''),
 }).unknown(true);
