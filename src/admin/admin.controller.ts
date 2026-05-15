@@ -1,18 +1,37 @@
 import {
   Body,
   Controller,
+  Delete,
   Post,
   Req,
+  Res,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { IsNotEmpty, IsString } from 'class-validator';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { AdminService } from './admin.service';
 import { AdminStorageService } from './admin-storage.service';
 import { AdminClaimGuard } from './admin-claim.guard';
 import { ClaimAdminDto } from './dto/claim-admin.dto';
 import { ParseAdminRegisterPipe } from './parse-admin-register.pipe';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../auth/guards/admin.guard';
+import { clearAuthCookies } from '../auth/auth-cookies';
+import type { AuthUser } from '../auth/auth.service';
+
+class DeleteOwnAccountDto {
+  @IsString()
+  @IsNotEmpty()
+  password: string;
+
+  @IsString()
+  @IsNotEmpty()
+  adminCode: string;
+}
+
 
 interface AdminRegisterFiles {
   avatar?: {
@@ -87,6 +106,26 @@ export class AdminController {
       }
     }
 
+    return result;
+  }
+
+  @Delete('me')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete own admin account (requires password + admin code)' })
+  @ApiResponse({ status: 200, description: 'Account deleted' })
+  @ApiResponse({ status: 401, description: 'Invalid password or admin code' })
+  async deleteOwnAccount(
+    @Req() req: { user: AuthUser },
+    @Body() dto: DeleteOwnAccountDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.adminService.deleteOwnAccount(
+      req.user.id,
+      dto.password,
+      dto.adminCode,
+    );
+    clearAuthCookies(res);
     return result;
   }
 }

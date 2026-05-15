@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -83,6 +84,31 @@ export class AdminService {
       where: { userId },
       data: { avatar: avatarPath },
     });
+  }
+
+  async deleteOwnAccount(
+    userId: string,
+    password: string,
+    adminCode: string,
+  ): Promise<{ message: string }> {
+    const expectedCode = this.config.get<string>('ADMIN_CODE');
+    if (!expectedCode || adminCode !== expectedCode) {
+      throw new UnauthorizedException('Invalid admin code');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const passwordValid = await bcrypt.compare(password, user.password);
+    if (!passwordValid) {
+      throw new UnauthorizedException('Invalid password');
+    }
+
+    await this.prisma.user.delete({ where: { id: userId } });
+
+    return { message: 'Account deleted successfully' };
   }
 
   async findAdminById(id: string) {
