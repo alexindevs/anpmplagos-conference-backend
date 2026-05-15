@@ -37,6 +37,7 @@ import { ConferenceDayModule } from './conference-day/conference-day.module';
 import { ReceiptsModule } from './receipts/receipts.module';
 import { ElectionsModule } from './elections/elections.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { HealthModule } from './health/health.module';
 import { KoboMoneySerializeInterceptor } from './common/kobo-money-serialize.interceptor';
 
 @Module({
@@ -78,6 +79,7 @@ import { KoboMoneySerializeInterceptor } from './common/kobo-money-serialize.int
     ReceiptsModule,
     ElectionsModule,
     MetricsModule,
+    HealthModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
