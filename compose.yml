@@ -1,17 +1,5 @@
 services:
 
-  migrate:
-    image: ${APP_IMAGE:-ghcr.io/alexindevs/anpmplagos-conference-backend:latest}
-    container_name: anpmp-migrate
-    command: npx prisma migrate deploy
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-anpmp}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-anpmp_2026}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: "no"
-
   backend:
     image: ${APP_IMAGE:-ghcr.io/alexindevs/anpmplagos-conference-backend:latest}
     container_name: anpmp-backend
@@ -23,8 +11,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
 
