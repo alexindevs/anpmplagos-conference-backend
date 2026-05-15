@@ -72,7 +72,7 @@ jobs:
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             export APP_IMAGE=${{ env.IMAGE_NAME }}:latest
             docker compose pull backend
-            docker compose up -d
+            docker compose up -d --force-recreate backend
             docker image prune -f
 
       - name: Health check
