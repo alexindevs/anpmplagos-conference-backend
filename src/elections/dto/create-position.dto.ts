@@ -1,13 +1,15 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsInt, MaxLength, Min } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class CreatePositionDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   title: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   description?: string;
 
   @IsOptional()

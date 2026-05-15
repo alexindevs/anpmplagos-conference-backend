@@ -13,6 +13,7 @@ import { createHash } from 'crypto';
 import type { SignOptions } from 'jsonwebtoken';
 import { LoginDto } from './dto';
 import type { Prisma, RegType } from '@prisma/client';
+import { MetricsService } from '../metrics/metrics.service';
 
 const DEFAULT_ACCESS_EXPIRY = '15m';
 const DEFAULT_REFRESH_EXPIRY_DAYS = 7;
@@ -52,6 +53,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly metrics: MetricsService,
   ) {}
 
   private hashToken(token: string): string {
@@ -127,19 +129,25 @@ export class AuthService {
   async logout(refreshToken: string): Promise<{ message: string }> {
     const tokenHash = this.hashToken(refreshToken);
 
-    await this.prisma.refreshToken.updateMany({
-      where: { tokenHash },
+    const result = await this.prisma.refreshToken.updateMany({
+      where: { tokenHash, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    if (result.count > 0) {
+      this.metrics.activeRefreshTokens.dec();
+    }
 
     return { message: 'Logged out successfully' };
   }
 
   async logoutAll(userId: string): Promise<{ message: string }> {
-    await this.prisma.refreshToken.updateMany({
-      where: { userId },
+    const result = await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    if (result.count > 0) {
+      this.metrics.activeRefreshTokens.dec(result.count);
+    }
     return { message: 'Logged out from all devices' };
   }
 
@@ -213,6 +221,7 @@ export class AuthService {
         expiresAt: refreshExpiry,
       },
     });
+    this.metrics.activeRefreshTokens.inc();
 
     return {
       access_token,

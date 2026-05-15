@@ -33,10 +33,12 @@ async function bootstrap() {
     .setVersion('1.0')
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  if (process.env.NODE_ENV !== 'production') {
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   // CORS - allow origins from env or default to localhost
-  const corsOrigins = process.env.CORS_ORIGINS?.split(',') ?? [
+  const corsOrigins = process.env.CORS_ORIGINS?.split(',').map(s => s.trim()) ?? [
     'http://localhost:3000',
   ];
   app.enableCors({

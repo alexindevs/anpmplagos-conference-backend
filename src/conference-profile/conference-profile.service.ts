@@ -11,7 +11,7 @@ import type {
 } from '@prisma/client';
 import type { Express } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateConferenceProfileMultipartDto } from './dto/create-conference-profile-multipart.dto';
 import { UpdateConferenceProfileMultipartDto } from './dto/update-conference-profile-multipart.dto';
 
@@ -61,7 +61,7 @@ export type ConferenceProfilePublic = Pick<
 export class ConferenceProfileService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly cloudinary: CloudinaryService,
+    private readonly storage: StorageService,
   ) {}
 
   private slugify(value: string): string {
@@ -140,7 +140,7 @@ export class ConferenceProfileService {
     file: Express.Multer.File,
     kind: ConferenceProfileKind,
   ): Promise<string> {
-    return this.cloudinary.uploadBuffer(
+    return this.storage.uploadBuffer(
       file.buffer,
       'conference-profiles',
       kind,

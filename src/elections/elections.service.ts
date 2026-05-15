@@ -6,7 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
@@ -17,7 +17,7 @@ import { CastVoteDto } from './dto/cast-vote.dto';
 export class ElectionsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly cloudinary: CloudinaryService,
+    private readonly storage: StorageService,
   ) {}
 
   // ─── Voting Settings ───────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ export class ElectionsService {
     await this.findPositionOrThrow(positionId);
     let avatarUrl: string | undefined;
     if (avatarFile) {
-      avatarUrl = await this.cloudinary.uploadBuffer(
+      avatarUrl = await this.storage.uploadBuffer(
         avatarFile.buffer,
         `elections/candidates`,
         `candidate-${positionId}`,
@@ -134,7 +134,7 @@ export class ElectionsService {
     if (!candidate) throw new NotFoundException('Candidate not found');
     let avatarUrl: string | undefined = candidate.avatar ?? undefined;
     if (avatarFile) {
-      avatarUrl = await this.cloudinary.uploadBuffer(
+      avatarUrl = await this.storage.uploadBuffer(
         avatarFile.buffer,
         `elections/candidates`,
         `candidate-${candidate.positionId}`,

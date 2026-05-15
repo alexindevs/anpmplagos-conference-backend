@@ -6,6 +6,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
   MinLength,
   ValidateIf,
 } from 'class-validator';
@@ -43,6 +44,7 @@ export class CreateRegistrationDto {
   })
   @IsString()
   @MinLength(8)
+  @MaxLength(128)
   password: string;
 
   // Member & Attendee
@@ -51,6 +53,7 @@ export class CreateRegistrationDto {
     (o: RegContext) => o.regType === 'member' || o.regType === 'attendee',
   )
   @IsString()
+  @MaxLength(255)
   fullName?: string;
 
   @ApiProperty({ example: '+234 800 123 4567', required: false })
@@ -58,11 +61,13 @@ export class CreateRegistrationDto {
     (o: RegContext) => o.regType === 'member' || o.regType === 'attendee',
   )
   @IsString()
+  @MaxLength(30)
   phone?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   bio?: string;
 
   // Member only
@@ -70,6 +75,7 @@ export class CreateRegistrationDto {
   @ValidateIf((o: RegContext) => o.regType === 'member')
   @IsString()
   @IsOptional()
+  @MaxLength(100)
   anpmpId?: string;
 
   @ApiProperty({ example: true, required: false })
@@ -80,16 +86,19 @@ export class CreateRegistrationDto {
   @ApiProperty({ example: 'Jane Olatunji', required: false })
   @ValidateIf((o: RegContext) => o.regType === 'member' && o.hasSpouse === true)
   @IsString()
+  @MaxLength(255)
   spouseName?: string;
 
   @ApiProperty({ example: 'spouse@example.com', required: false })
   @ValidateIf((o: RegContext) => o.regType === 'member' && o.hasSpouse === true)
-  @IsString()
+  @IsEmail()
+  @MaxLength(255)
   spouseEmail?: string;
 
   @ApiProperty({ example: '+234 800 765 4321', required: false })
   @ValidateIf((o: RegContext) => o.regType === 'member' && o.hasSpouse === true)
   @IsString()
+  @MaxLength(30)
   spousePhone?: string;
 
   // Member & Attendee (when in medical field)
@@ -100,6 +109,7 @@ export class CreateRegistrationDto {
       (o.regType === 'attendee' && o.inMedicalField === true),
   )
   @IsString()
+  @MaxLength(100)
   primarySpecialty?: string;
 
   @ApiProperty({ example: 'Lagos State Teaching Hospital', required: false })
@@ -109,24 +119,28 @@ export class CreateRegistrationDto {
       (o.regType === 'attendee' && o.inMedicalField === true),
   )
   @IsString()
+  @MaxLength(255)
   hospitalOrg?: string;
 
   @ApiProperty({ example: 'Dr', required: false })
   @ValidateIf((o: RegContext) => o.regType === 'member')
   @IsOptional()
   @IsString()
+  @MaxLength(50)
   title?: string;
 
   @ApiProperty({ example: '1 Hospital Road, Lagos', required: false })
   @ValidateIf((o: RegContext) => o.regType === 'member')
   @IsString()
   @IsNotEmpty()
+  @MaxLength(500)
   organizationAddress?: string;
 
   @ApiProperty({ example: 'Lagos Zone A', required: false })
   @ValidateIf((o: RegContext) => o.regType === 'member')
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100)
   zone?: string;
 
   // Attendee only
@@ -140,12 +154,14 @@ export class CreateRegistrationDto {
     (o: RegContext) => o.regType === 'attendee' && o.inMedicalField === false,
   )
   @IsString()
+  @MaxLength(255)
   occupation?: string;
 
   // Company
   @ApiProperty({ example: 'MediCorp Solutions', required: false })
   @ValidateIf((o: RegContext) => o.regType === 'company')
   @IsString()
+  @MaxLength(255)
   companyName?: string;
 
   @ApiProperty({
@@ -154,6 +170,7 @@ export class CreateRegistrationDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   tagline?: string;
 
   @ApiProperty({
@@ -163,6 +180,7 @@ export class CreateRegistrationDto {
   @ValidateIf((o: RegContext) => o.regType === 'company')
   @IsString()
   @IsNotEmpty()
+  @MaxLength(5000)
   description?: string;
 
   @ApiProperty({
@@ -171,25 +189,30 @@ export class CreateRegistrationDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(2083)
   website?: string;
 
   @ApiProperty({ example: 'contact@medicorp.com', required: false })
   @ValidateIf((o: RegContext) => o.regType === 'company')
-  @IsString()
+  @IsEmail()
+  @MaxLength(255)
   contactEmail?: string;
 
   @ApiProperty({ example: 'Sarah Jenkins', required: false })
   @ValidateIf((o: RegContext) => o.regType === 'company')
   @IsString()
+  @MaxLength(255)
   primaryContactName?: string;
 
   @ApiProperty({ example: '+234 800 555 6666', required: false })
   @ValidateIf((o: RegContext) => o.regType === 'company')
   @IsString()
+  @MaxLength(30)
   primaryContactPhone?: string;
 
   @ApiProperty({ example: 'Hall A, near entrance', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   boothPreference?: string;
 }

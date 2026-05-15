@@ -5,6 +5,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { SignOptions } from 'jsonwebtoken';
 import { AdminBoothController } from './admin-booth.controller';
+import { AdminClaimGuard } from './admin-claim.guard';
 import { AdminController } from './admin.controller';
 import { AdminDashboardController } from './admin-dashboard.controller';
 import { AdminProfileController } from './admin-profile.controller';
@@ -27,8 +28,8 @@ import { SupportModule } from '../support/support.module';
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: (config.get('JWT_EXPIRES_IN', '7d') ??
-            '7d') as SignOptions['expiresIn'],
+          expiresIn: (config.get('JWT_ACCESS_EXPIRES_IN', '15m') ??
+            '15m') as SignOptions['expiresIn'],
         },
       }),
       inject: [ConfigService],
@@ -44,7 +45,7 @@ import { SupportModule } from '../support/support.module';
     AdminProfileController,
     AdminModeratorsController,
   ],
-  providers: [AdminService, AdminStorageService, AdminDashboardService, AdminModeratorsService],
+  providers: [AdminClaimGuard, AdminService, AdminStorageService, AdminDashboardService, AdminModeratorsService],
   exports: [AdminService],
 })
 export class AdminModule {}

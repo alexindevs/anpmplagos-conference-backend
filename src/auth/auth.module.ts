@@ -19,8 +19,8 @@ import { SupportModule } from '../support/support.module';
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: (config.get('JWT_EXPIRES_IN', '7d') ??
-            '7d') as SignOptions['expiresIn'],
+          expiresIn: (config.get('JWT_ACCESS_EXPIRES_IN', '15m') ??
+            '15m') as SignOptions['expiresIn'],
         },
       }),
       inject: [ConfigService],

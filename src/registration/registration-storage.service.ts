@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
 import { RegistrationFiles } from './registration-files.interface';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -7,7 +7,7 @@ const ALLOWED_MIMES = ['image/jpeg', 'image/png'];
 
 @Injectable()
 export class RegistrationStorageService {
-  constructor(private readonly cloudinary: CloudinaryService) {}
+  constructor(private readonly storage: StorageService) {}
 
   async saveRegistrationImages(
     userId: string,
@@ -27,7 +27,7 @@ export class RegistrationStorageService {
     if (files.avatar?.[0]) {
       const file = files.avatar[0];
       if (ALLOWED_MIMES.includes(file.mimetype) && file.size <= MAX_FILE_SIZE) {
-        result.avatar = await this.cloudinary.uploadBuffer(
+        result.avatar = await this.storage.uploadBuffer(
           file.buffer,
           folder,
           'avatar',
@@ -39,7 +39,7 @@ export class RegistrationStorageService {
     if (files.headerImage?.[0]) {
       const file = files.headerImage[0];
       if (ALLOWED_MIMES.includes(file.mimetype) && file.size <= MAX_FILE_SIZE) {
-        result.headerImage = await this.cloudinary.uploadBuffer(
+        result.headerImage = await this.storage.uploadBuffer(
           file.buffer,
           folder,
           'header',
@@ -51,7 +51,7 @@ export class RegistrationStorageService {
     if (files.logo?.[0]) {
       const file = files.logo[0];
       if (ALLOWED_MIMES.includes(file.mimetype) && file.size <= MAX_FILE_SIZE) {
-        result.logo = await this.cloudinary.uploadBuffer(
+        result.logo = await this.storage.uploadBuffer(
           file.buffer,
           folder,
           'logo',

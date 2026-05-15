@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 
@@ -19,6 +20,7 @@ export class CreateConferenceProfileMultipartDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(1)
+  @MaxLength(255)
   name: string;
 
   @ApiProperty({ example: 'Consultant Cardiologist' })
@@ -26,6 +28,7 @@ export class CreateConferenceProfileMultipartDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(1)
+  @MaxLength(255)
   role: string;
 
   @ApiProperty({
@@ -36,6 +39,7 @@ export class CreateConferenceProfileMultipartDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(1)
+  @MaxLength(500)
   qualifications: string;
 
   @ApiProperty({ example: 'Leading innovation in rural healthcare' })
@@ -43,6 +47,7 @@ export class CreateConferenceProfileMultipartDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(1)
+  @MaxLength(500)
   byline: string;
 
   @ApiProperty({ enum: ['keynote', 'featured'] })
@@ -57,29 +62,34 @@ export class CreateConferenceProfileMultipartDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(1)
+  @MaxLength(5000)
   description: string;
 
   @ApiPropertyOptional({ example: 'https://example.com' })
   @Transform(({ value }) => emptyToUndefined(value))
   @IsOptional()
   @IsString()
+  @MaxLength(2083)
   websiteLink?: string;
 
   @ApiPropertyOptional({ example: 'https://facebook.com/...' })
   @Transform(({ value }) => emptyToUndefined(value))
   @IsOptional()
   @IsString()
+  @MaxLength(2083)
   facebookLink?: string;
 
   @ApiPropertyOptional({ example: 'https://x.com/...' })
   @Transform(({ value }) => emptyToUndefined(value))
   @IsOptional()
   @IsString()
+  @MaxLength(2083)
   xLink?: string;
 
   @ApiPropertyOptional({ example: 'https://instagram.com/...' })
   @Transform(({ value }) => emptyToUndefined(value))
   @IsOptional()
   @IsString()
+  @MaxLength(2083)
   instagramLink?: string;
 }

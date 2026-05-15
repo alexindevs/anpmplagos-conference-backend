@@ -7,6 +7,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -18,11 +19,13 @@ export class CreateBoothMultipartDto {
   @ApiProperty({ example: 'Booth A1' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   name: string;
 
   @ApiProperty({ example: '10x10' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50)
   size: string;
 
   @ApiProperty({
@@ -43,6 +46,7 @@ export class CreateBoothMultipartDto {
   )
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   description?: string;
 
   @ApiPropertyOptional({
@@ -79,5 +83,6 @@ export class CreateBoothMultipartDto {
   )
   @IsOptional()
   @IsString()
+  @MaxLength(2083)
   boothImageUrl?: string;
 }

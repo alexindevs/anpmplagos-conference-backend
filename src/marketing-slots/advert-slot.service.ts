@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateAdvertSlotMultipartDto } from './dto/create-advert-slot-multipart.dto';
 
@@ -24,7 +24,7 @@ export type AdvertSlotAdminListItem = {
 export class AdvertSlotService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly cloudinary: CloudinaryService,
+    private readonly storage: StorageService,
   ) {}
 
   findAvailable() {
@@ -138,7 +138,7 @@ export class AdvertSlotService {
       if (file.size > IMAGE_MAX_BYTES) {
         throw new BadRequestException('advertSlotImage must be at most 5MB');
       }
-      image = await this.cloudinary.uploadBuffer(
+      image = await this.storage.uploadBuffer(
         file.buffer,
         'advert-slots',
         'advert-slot',

@@ -1,9 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsEmail,
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
   ValidateIf,
 } from 'class-validator';
 import { CreateRegistrationBaseDto } from './create-registration.dto';
@@ -21,6 +23,7 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
     description: 'Registrant full name',
   })
   @IsString()
+  @MaxLength(255)
   fullName: string;
 
   @ApiProperty({
@@ -28,6 +31,7 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
     description: 'Registrant phone number',
   })
   @IsString()
+  @MaxLength(30)
   phone: string;
 
   @ApiProperty({
@@ -37,6 +41,7 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(50)
   title?: string;
 
   @ApiProperty({
@@ -46,6 +51,7 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   bio?: string;
 
   @ApiProperty({
@@ -54,6 +60,7 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
   })
   @IsString()
   @IsOptional()
+  @MaxLength(100)
   anpmpId?: string;
 
   @ApiProperty({
@@ -70,6 +77,7 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
   })
   @ValidateIf((o) => o.hasSpouse === true)
   @IsString()
+  @MaxLength(255)
   spouseName?: string;
 
   @ApiProperty({
@@ -78,7 +86,8 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
     required: false,
   })
   @ValidateIf((o) => o.hasSpouse === true)
-  @IsString()
+  @IsEmail()
+  @MaxLength(255)
   spouseEmail?: string;
 
   @ApiProperty({
@@ -88,6 +97,7 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
   })
   @ValidateIf((o) => o.hasSpouse === true)
   @IsString()
+  @MaxLength(30)
   spousePhone?: string;
 
   @ApiProperty({
@@ -96,6 +106,7 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
     enum: ['general', 'pediatrics', 'surgery', 'traditional', 'other'],
   })
   @IsString()
+  @MaxLength(100)
   primarySpecialty: string;
 
   @ApiProperty({
@@ -103,6 +114,7 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
     description: 'Hospital or organization name',
   })
   @IsString()
+  @MaxLength(255)
   hospitalOrg: string;
 
   @ApiProperty({
@@ -111,6 +123,7 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
   })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(500)
   organizationAddress: string;
 
   @ApiProperty({
@@ -119,5 +132,6 @@ export class CreateMemberRegistrationDto extends CreateRegistrationBaseDto {
   })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100)
   zone: string;
 }

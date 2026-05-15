@@ -2,6 +2,7 @@ import {
   IsString,
   IsOptional,
   IsInt,
+  MaxLength,
   Min,
   IsBoolean,
   IsNotEmpty,
@@ -12,10 +13,12 @@ export class UpdatePositionDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   title?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   description?: string;
 
   @IsOptional()

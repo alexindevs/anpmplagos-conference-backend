@@ -52,7 +52,7 @@ const supportMailerLogger = new Logger('SupportMailer');
             ? {
                 host,
                 port,
-                // secure,
+                secure,
                 auth: { user, pass },
               }
             : {

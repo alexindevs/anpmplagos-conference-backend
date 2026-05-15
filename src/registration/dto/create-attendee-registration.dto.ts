@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, ValidateIf } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
 import { CreateRegistrationBaseDto } from './create-registration.dto';
 
 export class CreateAttendeeRegistrationDto extends CreateRegistrationBaseDto {
@@ -15,6 +15,7 @@ export class CreateAttendeeRegistrationDto extends CreateRegistrationBaseDto {
     description: 'Registrant full name',
   })
   @IsString()
+  @MaxLength(255)
   fullName: string;
 
   @ApiProperty({
@@ -22,6 +23,7 @@ export class CreateAttendeeRegistrationDto extends CreateRegistrationBaseDto {
     description: 'Registrant phone number',
   })
   @IsString()
+  @MaxLength(30)
   phone: string;
 
   @ApiProperty({
@@ -31,6 +33,7 @@ export class CreateAttendeeRegistrationDto extends CreateRegistrationBaseDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   bio?: string;
 
   @ApiProperty({
@@ -47,6 +50,7 @@ export class CreateAttendeeRegistrationDto extends CreateRegistrationBaseDto {
   })
   @ValidateIf((o) => o.inMedicalField === true)
   @IsString()
+  @MaxLength(100)
   primarySpecialty?: string;
 
   @ApiProperty({
@@ -56,6 +60,7 @@ export class CreateAttendeeRegistrationDto extends CreateRegistrationBaseDto {
   })
   @ValidateIf((o) => o.inMedicalField === true)
   @IsString()
+  @MaxLength(255)
   hospitalOrg?: string;
 
   @ApiProperty({
@@ -65,5 +70,6 @@ export class CreateAttendeeRegistrationDto extends CreateRegistrationBaseDto {
   })
   @ValidateIf((o) => o.inMedicalField === false)
   @IsString()
+  @MaxLength(255)
   occupation?: string;
 }

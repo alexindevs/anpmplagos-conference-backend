@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -12,6 +13,7 @@ export class CreateAdvertSlotMultipartDto {
   @ApiProperty({ example: 'Homepage leaderboard' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   title: string;
 
   @ApiProperty({
@@ -32,6 +34,7 @@ export class CreateAdvertSlotMultipartDto {
   )
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   description?: string;
 
   @ApiPropertyOptional({ example: false })
@@ -54,5 +57,6 @@ export class CreateAdvertSlotMultipartDto {
   )
   @IsOptional()
   @IsString()
+  @MaxLength(2083)
   advertSlotImageUrl?: string;
 }

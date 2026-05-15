@@ -1,16 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreatePanelDto {
   @ApiProperty({ example: 'Healthcare Policy Discussion' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   title: string;
 
   @ApiProperty({ example: 'Panel discussion on emerging healthcare policies' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(2000)
   description: string;
 
   @ApiProperty({

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIMES = ['image/jpeg', 'image/png'];
@@ -13,7 +13,7 @@ export interface AdminAvatarFile {
 
 @Injectable()
 export class AdminStorageService {
-  constructor(private readonly cloudinary: CloudinaryService) {}
+  constructor(private readonly storage: StorageService) {}
 
   async saveAdminAvatar(
     userId: string,
@@ -26,7 +26,7 @@ export class AdminStorageService {
     ) {
       return undefined;
     }
-    return this.cloudinary.uploadBuffer(
+    return this.storage.uploadBuffer(
       file.buffer,
       `admins/${userId}`,
       'avatar',

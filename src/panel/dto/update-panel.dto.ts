@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsEnum,
   IsBoolean,
+  MaxLength,
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -13,6 +14,7 @@ export class UpdatePanelDto {
   @ApiPropertyOptional({ example: 'Healthcare Policy Discussion - Updated' })
   @IsString()
   @IsOptional()
+  @MaxLength(255)
   title?: string;
 
   @ApiPropertyOptional({
@@ -20,6 +22,7 @@ export class UpdatePanelDto {
   })
   @IsString()
   @IsOptional()
+  @MaxLength(2000)
   description?: string;
 
   @ApiPropertyOptional({

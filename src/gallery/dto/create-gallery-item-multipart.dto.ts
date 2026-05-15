@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class CreateGalleryItemMultipartDto {
@@ -12,5 +12,6 @@ export class CreateGalleryItemMultipartDto {
   )
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   caption?: string;
 }

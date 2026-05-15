@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
 import {
   PaymentKind,
   PaymentStatus,
@@ -31,7 +31,7 @@ export class EventPassService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly cloudinary: CloudinaryService,
+    private readonly storage: StorageService,
     private readonly config: ConfigService,
   ) {
     this.frontendUrl = this.config.get<string>('FRONTEND_URL') || '';
@@ -438,7 +438,7 @@ export class EventPassService {
       errorCorrectionLevel: 'H',
     });
 
-    const qrCodeUrl = await this.cloudinary.uploadBuffer(
+    const qrCodeUrl = await this.storage.uploadBuffer(
       qrCodeBuffer,
       `event-passes/${userId}`,
       type,

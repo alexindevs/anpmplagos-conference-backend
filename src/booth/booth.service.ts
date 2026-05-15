@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Booth, Prisma, RegistrationStatus, SponsorTier } from '@prisma/client';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateBoothMultipartDto } from './dto/create-booth-multipart.dto';
 import { effectiveDisplayTier, tierRank } from '../company/company-tier.util';
@@ -36,7 +36,7 @@ export type BoothAdminListItem = {
 export class BoothService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly cloudinary: CloudinaryService,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -153,7 +153,7 @@ export class BoothService {
       if (file.size > BOOTH_IMAGE_MAX_BYTES) {
         throw new BadRequestException('boothImage must be at most 5MB');
       }
-      boothImage = await this.cloudinary.uploadBuffer(
+      boothImage = await this.storage.uploadBuffer(
         file.buffer,
         'booths',
         'booth',

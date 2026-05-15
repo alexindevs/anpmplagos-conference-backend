@@ -13,7 +13,7 @@ export const envValidationSchema = Joi.object({
   REDIS_PASSWORD: Joi.string().allow('').default(''),
   REDIS_DB: Joi.number().default(0),
 
-  JWT_SECRET: Joi.string().min(16).required(),
+  JWT_SECRET: Joi.string().min(32).required(),
   JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),
   JWT_REFRESH_EXPIRY_DAYS: Joi.number().default(7),
 
@@ -24,6 +24,29 @@ export const envValidationSchema = Joi.object({
   CLOUDINARY_CLOUD_NAME: Joi.string().required(),
   CLOUDINARY_API_KEY: Joi.string().required(),
   CLOUDINARY_API_SECRET: Joi.string().required(),
+
+  STORAGE_PROVIDER: Joi.string().valid('cloudinary', 'backblaze').default('cloudinary'),
+  BACKBLAZE_ENDPOINT: Joi.string().when('STORAGE_PROVIDER', {
+    is: 'backblaze',
+    then: Joi.required(),
+    otherwise: Joi.optional().allow(''),
+  }),
+  BACKBLAZE_BUCKET_NAME: Joi.string().when('STORAGE_PROVIDER', {
+    is: 'backblaze',
+    then: Joi.required(),
+    otherwise: Joi.optional().allow(''),
+  }),
+  BACKBLAZE_KEY_ID: Joi.string().when('STORAGE_PROVIDER', {
+    is: 'backblaze',
+    then: Joi.required(),
+    otherwise: Joi.optional().allow(''),
+  }),
+  BACKBLAZE_APP_KEY: Joi.string().when('STORAGE_PROVIDER', {
+    is: 'backblaze',
+    then: Joi.required(),
+    otherwise: Joi.optional().allow(''),
+  }),
+  BACKBLAZE_REGION: Joi.string().optional().allow(''),
 
   PAYMENT_MODE: Joi.string().valid('paystack', 'manual').default('paystack'),
   PAYSTACK_SECRET_KEY: Joi.string().when('PAYMENT_MODE', {

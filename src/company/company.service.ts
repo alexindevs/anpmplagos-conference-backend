@@ -14,7 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BoothService } from '../booth/booth.service';
 import { AdvertSlotService } from '../marketing-slots/advert-slot.service';
 import { BrandingSlotService } from '../marketing-slots/branding-slot.service';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateCompanyProductDto } from './dto/create-company-product.dto';
 import type { Express } from 'express';
 import { CreateCompanyProductMultipartDto } from './dto/create-company-product-multipart.dto';
@@ -37,7 +37,7 @@ export class CompanyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly boothService: BoothService,
-    private readonly cloudinary: CloudinaryService,
+    private readonly storage: StorageService,
     private readonly advertSlotService: AdvertSlotService,
     private readonly brandingSlotService: BrandingSlotService,
     private readonly memberSheets: MemberSheetsService,
@@ -1014,7 +1014,7 @@ export class CompanyService {
       if (file.size > PRODUCT_IMAGE_MAX_BYTES) {
         throw new BadRequestException('productImage must be at most 5MB');
       }
-      imageUrl = await this.cloudinary.uploadBuffer(
+      imageUrl = await this.storage.uploadBuffer(
         file.buffer,
         `companies/${companyId}/products`,
         'product',

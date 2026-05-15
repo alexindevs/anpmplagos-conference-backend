@@ -12,7 +12,8 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import type { Express } from 'express';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
+import { MetricsService } from '../metrics/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.service';
 import { CreateSupportTicketDto, RespondSupportTicketDto } from './dto';
@@ -70,8 +71,9 @@ export class SupportTicketService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-    private readonly cloudinary: CloudinaryService,
+    private readonly storage: StorageService,
     private readonly emailService: SupportEmailService,
+    private readonly metrics: MetricsService,
   ) {
     this.frontendUrl =
       this.config.get<string>('FRONTEND_URL', '').trim() ||
@@ -159,7 +161,7 @@ export class SupportTicketService {
 
     for (const file of files) {
       // CloudinaryService only supports PNG/JPG - files should already be validated.
-      const url = await this.cloudinary.uploadBuffer(
+      const url = await this.storage.uploadBuffer(
         file.buffer,
         'support-tickets',
         `${folder}-${file.originalname}-${randomUUID().slice(0, 8)}`,
@@ -203,6 +205,7 @@ export class SupportTicketService {
         status: 'open',
       },
     });
+    this.metrics.supportTicketsTotal.inc({ category: dto.category });
 
     const screenshotFiles = files.images ?? [];
     let screenshotUrls: string[] = [];

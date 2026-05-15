@@ -4,7 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { StorageService } from '../storage/storage.service';
+import { MetricsService } from '../metrics/metrics.service';
 import { CreateGalleryItemMultipartDto } from './dto/create-gallery-item-multipart.dto';
 import type { Express } from 'express';
 
@@ -15,7 +16,8 @@ const ALLOWED_MIME = new Set(['image/jpeg', 'image/png']);
 export class GalleryService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly cloudinary: CloudinaryService,
+    private readonly storage: StorageService,
+    private readonly metrics: MetricsService,
   ) {}
 
   async createFromMultipart(
@@ -34,12 +36,13 @@ export class GalleryService {
       throw new BadRequestException('Only JPEG and PNG images are allowed');
     }
 
-    const imageUrl = await this.cloudinary.uploadBuffer(
+    const imageUrl = await this.storage.uploadBuffer(
       file.buffer,
       'gallery',
       'item',
       file.mimetype,
     );
+    this.metrics.galleryUploadsTotal.inc();
 
     return this.prisma.galleryItem.create({
       data: {

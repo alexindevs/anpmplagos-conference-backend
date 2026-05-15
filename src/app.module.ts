@@ -16,6 +16,7 @@ import { DirectoryModule } from './directory/directory.module';
 import { AuthModule } from './auth/auth.module';
 import { BoothModule } from './booth/booth.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { StorageModule } from './storage/storage.module';
 import { CompanyModule } from './company/company.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RegistrationModule } from './registration/registration.module';
@@ -35,6 +36,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { ConferenceDayModule } from './conference-day/conference-day.module';
 import { ReceiptsModule } from './receipts/receipts.module';
 import { ElectionsModule } from './elections/elections.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { KoboMoneySerializeInterceptor } from './common/kobo-money-serialize.interceptor';
 
 @Module({
@@ -53,6 +55,7 @@ import { KoboMoneySerializeInterceptor } from './common/kobo-money-serialize.int
     CacheModule,
     PrismaModule,
     CloudinaryModule,
+    StorageModule,
     DirectoryModule,
     AdminModule,
     AuthModule,
@@ -74,14 +77,15 @@ import { KoboMoneySerializeInterceptor } from './common/kobo-money-serialize.int
     ConferenceDayModule,
     ReceiptsModule,
     ElectionsModule,
+    MetricsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: (config.get('JWT_EXPIRES_IN', '7d') ??
-            '7d') as SignOptions['expiresIn'],
+          expiresIn: (config.get('JWT_ACCESS_EXPIRES_IN', '15m') ??
+            '15m') as SignOptions['expiresIn'],
         },
       }),
       inject: [ConfigService],

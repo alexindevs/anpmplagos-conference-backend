@@ -51,6 +51,7 @@ import {
   assertAdvertSlotsNotBundleOnly,
   assertBrandingSlotsNotBundleOnly,
 } from '../marketing-slots/marketing-slot-bundle-guard';
+import { MetricsService } from '../metrics/metrics.service';
 
 type PaystackInitializeResponse = {
   status: boolean;
@@ -95,6 +96,7 @@ export class PaystackService {
     private readonly boothService: BoothService,
     private readonly cacheService: CacheService,
     private readonly sponsorshipBundleResolution: SponsorshipBundleResolutionService,
+    private readonly metrics: MetricsService,
   ) {
     this.paystackSecretKey = this.config.get<string>('PAYSTACK_SECRET_KEY', '');
     this.paystackBaseUrl = this.config.get<string>(
@@ -354,17 +356,6 @@ export class PaystackService {
     payload: string,
     signature: string | undefined,
   ): boolean {
-    const webhookSigEnabled =
-      this.config.get<string>('PAYSTACK_WEBHOOK_SECRET_ENABLED', 'true') !==
-      'false';
-
-    if (!webhookSigEnabled) {
-      this.logger.warn(
-        'Webhook signature verification disabled via PAYSTACK_WEBHOOK_SECRET_ENABLED=false',
-      );
-      return true;
-    }
-
     if (!this.paystackSecretKey) {
       throw new Error(
         'PAYSTACK_SECRET_KEY is not configured; cannot verify webhook signatures',
@@ -1483,6 +1474,7 @@ export class PaystackService {
         providerResponse: data as unknown as Prisma.InputJsonValue,
       },
     });
+    this.metrics.paymentsTotal.inc({ kind: payment.kind, status: 'success' });
 
     await this.applySuccessfulPayment(payment.id, data);
   }
@@ -1506,8 +1498,11 @@ export class PaystackService {
 
     const failed = await this.prisma.payment.findUnique({
       where: { reference },
-      select: { id: true, orderId: true },
+      select: { id: true, orderId: true, kind: true },
     });
+    if (failed?.kind) {
+      this.metrics.paymentsTotal.inc({ kind: failed.kind, status: 'failed' });
+    }
     if (failed?.id) {
       await this.releaseCheckoutHoldsForPayment(failed.id);
     }
@@ -1555,6 +1550,7 @@ export class PaystackService {
         where: { id: user.id },
         data: { registrationStatus: 'registered' },
       });
+      this.metrics.registrationsTotal.inc({ type: user.regType });
 
       // Invalidate registration and admin caches
       await Promise.all([

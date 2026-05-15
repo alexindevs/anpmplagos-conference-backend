@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -14,11 +15,13 @@ export class CreateHotelRoomBulkDto {
   @ApiProperty({ example: 'Eko Hotel & Suites' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   hotelName: string;
 
   @ApiProperty({ example: 'Standard King' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   roomType: string;
 
   @ApiProperty({ example: 25_000_000 })
@@ -30,6 +33,7 @@ export class CreateHotelRoomBulkDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   description?: string;
 
   @ApiPropertyOptional()
