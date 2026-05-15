@@ -70,8 +70,9 @@ jobs:
             git fetch origin
             git reset --hard origin/main
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            APP_IMAGE=${{ env.IMAGE_NAME }}:latest docker compose pull backend
-            APP_IMAGE=${{ env.IMAGE_NAME }}:latest docker compose up -d
+            export APP_IMAGE=${{ env.IMAGE_NAME }}:latest
+            docker compose pull migrate backend
+            docker compose up -d
             docker image prune -f
 
       - name: Health check
