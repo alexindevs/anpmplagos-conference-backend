@@ -1,13 +1,12 @@
-import { Controller, Get, Inject, HttpCode } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
+import { Controller, Get, HttpCode } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheService } from '../cache/cache.service';
 
 @Controller('health')
 export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    private readonly cache: CacheService,
   ) {}
 
   @Get()
@@ -27,8 +26,8 @@ export class HealthController {
     }
 
     try {
-      const store: any = (this.cache as any).store;
-      await store.client.ping();
+      await this.cache.set('__health__', '1', 5000);
+      await this.cache.get('__health__');
     } catch {
       result.status = 'degraded';
       result.redis = 'unreachable';
