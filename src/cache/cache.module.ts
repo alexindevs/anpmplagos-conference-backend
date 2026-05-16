@@ -25,7 +25,10 @@ import { CacheService } from './cache.service';
         const store = await redisStore({
           ...storeOptions,
           ttl: 60 * 1000,
+          retryStrategy: () => null,
         });
+        // Prevent ioredis from emitting unhandled error events when Redis is unavailable
+        (store as any).client?.on('error', () => {});
         return {
           store: () => store,
           ttl: 60 * 1000,
