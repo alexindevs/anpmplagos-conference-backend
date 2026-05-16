@@ -901,27 +901,8 @@ export class PaystackService {
         'This advert slot is reserved and cannot be purchased',
       );
     }
-    if (slot.isTaken && slot.takenById !== company.id) {
-      throw new BadRequestException('This advert slot is already taken');
-    }
-    if (slot.isTaken && slot.takenById === company.id) {
-      throw new BadRequestException(
-        'Your company already owns this advert slot',
-      );
-    }
-
-    const existingPending = await this.prisma.payment.findFirst({
-      where: {
-        kind: 'advert_slot',
-        advertSlotId: slot.id,
-        status: 'pending',
-      },
-      select: { id: true },
-    });
-    if (existingPending) {
-      throw new BadRequestException(
-        'There is already a pending payment for this advert slot',
-      );
+    if (slot.availableSlots <= 0) {
+      throw new BadRequestException('This advert slot is sold out');
     }
 
     const baseAmount = slot.price;
@@ -1034,27 +1015,8 @@ export class PaystackService {
         'This branding slot is reserved and cannot be purchased',
       );
     }
-    if (slot.isTaken && slot.takenById !== company.id) {
-      throw new BadRequestException('This branding slot is already taken');
-    }
-    if (slot.isTaken && slot.takenById === company.id) {
-      throw new BadRequestException(
-        'Your company already owns this branding slot',
-      );
-    }
-
-    const existingPending = await this.prisma.payment.findFirst({
-      where: {
-        kind: 'branding_slot',
-        brandingSlotId: slot.id,
-        status: 'pending',
-      },
-      select: { id: true },
-    });
-    if (existingPending) {
-      throw new BadRequestException(
-        'There is already a pending payment for this branding slot',
-      );
+    if (slot.availableSlots <= 0) {
+      throw new BadRequestException('This branding slot is sold out');
     }
 
     const baseAmount = slot.price;
@@ -1976,40 +1938,17 @@ export class PaystackService {
         );
         return;
       }
-      if (
-        isBlockedByOtherCheckoutHold(
-          slot.checkoutHoldExpiresAt,
-          slot.checkoutHoldOrderId,
-          slot.checkoutHoldPaymentId,
-          {
-            orderId: payment.orderId,
-            paymentId: payment.id,
-          },
-        )
-      ) {
+      const decremented = await this.prisma.advertSlot.updateMany({
+        where: { id: slot.id, availableSlots: { gt: 0 } },
+        data: { availableSlots: { decrement: 1 } },
+      });
+      if (decremented.count === 0) {
         await this.refundBecauseUnavailable(
           payment,
           paystackData,
-          'Advert slot was held by another checkout',
+          'Advert slot sold out before payment completed',
         );
         return;
-      }
-      if (slot.isTaken && slot.takenById !== company.id) {
-        await this.refundBecauseUnavailable(
-          payment,
-          paystackData,
-          'Advert slot was taken by another company',
-        );
-        return;
-      }
-      if (!slot.isTaken || slot.takenById !== company.id) {
-        await this.prisma.advertSlot.update({
-          where: { id: slot.id },
-          data: {
-            isTaken: true,
-            takenById: company.id,
-          },
-        });
       }
       return;
     }
@@ -2033,40 +1972,17 @@ export class PaystackService {
         );
         return;
       }
-      if (
-        isBlockedByOtherCheckoutHold(
-          slot.checkoutHoldExpiresAt,
-          slot.checkoutHoldOrderId,
-          slot.checkoutHoldPaymentId,
-          {
-            orderId: payment.orderId,
-            paymentId: payment.id,
-          },
-        )
-      ) {
+      const decremented = await this.prisma.brandingSlot.updateMany({
+        where: { id: slot.id, availableSlots: { gt: 0 } },
+        data: { availableSlots: { decrement: 1 } },
+      });
+      if (decremented.count === 0) {
         await this.refundBecauseUnavailable(
           payment,
           paystackData,
-          'Branding slot was held by another checkout',
+          'Branding slot sold out before payment completed',
         );
         return;
-      }
-      if (slot.isTaken && slot.takenById !== company.id) {
-        await this.refundBecauseUnavailable(
-          payment,
-          paystackData,
-          'Branding slot was taken by another company',
-        );
-        return;
-      }
-      if (!slot.isTaken || slot.takenById !== company.id) {
-        await this.prisma.brandingSlot.update({
-          where: { id: slot.id },
-          data: {
-            isTaken: true,
-            takenById: company.id,
-          },
-        });
       }
       return;
     }
@@ -2200,39 +2116,46 @@ export class PaystackService {
       await this.cacheService.delPattern('admin:dashboard:*');
     }
 
+    const decrementedAdvertIds: string[] = [];
+    const decrementedBrandingIds: string[] = [];
+    const rollbackBundleSlots = async () => {
+      await Promise.all([
+        ...decrementedAdvertIds.map((id) =>
+          this.prisma.advertSlot.update({
+            where: { id },
+            data: { availableSlots: { increment: 1 } },
+          }),
+        ),
+        ...decrementedBrandingIds.map((id) =>
+          this.prisma.brandingSlot.update({
+            where: { id },
+            data: { availableSlots: { increment: 1 } },
+          }),
+        ),
+      ]);
+    };
+
     for (const advertId of bundle.advertSlotIds) {
       const slot = await this.prisma.advertSlot.findUnique({
         where: { id: advertId },
       });
       if (!slot) {
+        await rollbackBundleSlots();
         return 'Bundle advert slot not found';
       }
       if (slot.isReserved) {
+        await rollbackBundleSlots();
         return 'Bundle advert slot was reserved';
       }
-      if (slot.isTaken && slot.takenById !== company.id) {
-        return 'Bundle advert slot was taken by another company';
+      const decremented = await this.prisma.advertSlot.updateMany({
+        where: { id: slot.id, availableSlots: { gt: 0 } },
+        data: { availableSlots: { decrement: 1 } },
+      });
+      if (decremented.count === 0) {
+        await rollbackBundleSlots();
+        return 'Bundle advert slot sold out';
       }
-      if (
-        isBlockedByOtherCheckoutHold(
-          slot.checkoutHoldExpiresAt,
-          slot.checkoutHoldOrderId,
-          slot.checkoutHoldPaymentId,
-          exclude,
-        )
-      ) {
-        return 'Bundle advert slot was held by another checkout';
-      }
-      if (!slot.isTaken || slot.takenById !== company.id) {
-        await this.prisma.advertSlot.update({
-          where: { id: slot.id },
-          data: {
-            isTaken: true,
-            takenById: company.id,
-            ...clearHold,
-          },
-        });
-      }
+      decrementedAdvertIds.push(slot.id);
     }
 
     for (const brandingId of bundle.brandingSlotIds) {
@@ -2240,34 +2163,22 @@ export class PaystackService {
         where: { id: brandingId },
       });
       if (!slot) {
+        await rollbackBundleSlots();
         return 'Bundle branding slot not found';
       }
       if (slot.isReserved) {
+        await rollbackBundleSlots();
         return 'Bundle branding slot was reserved';
       }
-      if (slot.isTaken && slot.takenById !== company.id) {
-        return 'Bundle branding slot was taken by another company';
+      const decremented = await this.prisma.brandingSlot.updateMany({
+        where: { id: slot.id, availableSlots: { gt: 0 } },
+        data: { availableSlots: { decrement: 1 } },
+      });
+      if (decremented.count === 0) {
+        await rollbackBundleSlots();
+        return 'Bundle branding slot sold out';
       }
-      if (
-        isBlockedByOtherCheckoutHold(
-          slot.checkoutHoldExpiresAt,
-          slot.checkoutHoldOrderId,
-          slot.checkoutHoldPaymentId,
-          exclude,
-        )
-      ) {
-        return 'Bundle branding slot was held by another checkout';
-      }
-      if (!slot.isTaken || slot.takenById !== company.id) {
-        await this.prisma.brandingSlot.update({
-          where: { id: slot.id },
-          data: {
-            isTaken: true,
-            takenById: company.id,
-            ...clearHold,
-          },
-        });
-      }
+      decrementedBrandingIds.push(slot.id);
     }
 
     return null;
@@ -2300,14 +2211,6 @@ export class PaystackService {
         where: { checkoutHoldPaymentId: paymentId },
         data: clear,
       }),
-      this.prisma.advertSlot.updateMany({
-        where: { checkoutHoldPaymentId: paymentId },
-        data: clear,
-      }),
-      this.prisma.brandingSlot.updateMany({
-        where: { checkoutHoldPaymentId: paymentId },
-        data: clear,
-      }),
     ]);
   }
 
@@ -2335,14 +2238,6 @@ export class PaystackService {
         data: clear,
       }),
       this.prisma.presentation.updateMany({
-        where: { checkoutHoldOrderId: orderId },
-        data: clear,
-      }),
-      this.prisma.advertSlot.updateMany({
-        where: { checkoutHoldOrderId: orderId },
-        data: clear,
-      }),
-      this.prisma.brandingSlot.updateMany({
         where: { checkoutHoldOrderId: orderId },
         data: clear,
       }),
@@ -2408,6 +2303,8 @@ export class PaystackService {
       return;
     }
 
+    const decrementedAdvertIds: string[] = [];
+    const decrementedBrandingIds: string[] = [];
     for (const item of order.items) {
       const err = await this.fulfillSingleOrderItem(
         item,
@@ -2416,12 +2313,31 @@ export class PaystackService {
         order.id,
       );
       if (err) {
+        await Promise.all([
+          ...decrementedAdvertIds.map((id) =>
+            this.prisma.advertSlot.update({
+              where: { id },
+              data: { availableSlots: { increment: 1 } },
+            }),
+          ),
+          ...decrementedBrandingIds.map((id) =>
+            this.prisma.brandingSlot.update({
+              where: { id },
+              data: { availableSlots: { increment: 1 } },
+            }),
+          ),
+        ]);
         await this.refundBecauseUnavailable(payment, paystackData, err);
         await this.prisma.order.update({
           where: { id: order.id },
           data: { status: 'failed' },
         });
         return;
+      }
+      if (item.type === 'advert_slot' && item.advertSlotId) {
+        decrementedAdvertIds.push(item.advertSlotId);
+      } else if (item.type === 'branding_slot' && item.brandingSlotId) {
+        decrementedBrandingIds.push(item.brandingSlotId);
       }
     }
 
@@ -2682,24 +2598,12 @@ export class PaystackService {
         if (slot.isReserved) {
           return 'Advert slot was reserved before payment completed';
         }
-        if (slot.isTaken && slot.takenById !== company.id) {
-          return 'Advert slot was taken by another company';
-        }
-        if (
-          isBlockedByOtherCheckoutHold(
-            slot.checkoutHoldExpiresAt,
-            slot.checkoutHoldOrderId,
-            slot.checkoutHoldPaymentId,
-            { orderId },
-          )
-        ) {
-          return 'Advert slot was held by another checkout';
-        }
-        if (!slot.isTaken || slot.takenById !== company.id) {
-          await this.prisma.advertSlot.update({
-            where: { id: slot.id },
-            data: { isTaken: true, takenById: company.id },
-          });
+        const decremented = await this.prisma.advertSlot.updateMany({
+          where: { id: slot.id, availableSlots: { gt: 0 } },
+          data: { availableSlots: { decrement: 1 } },
+        });
+        if (decremented.count === 0) {
+          return 'Advert slot sold out before payment completed';
         }
         return null;
       }
@@ -2716,24 +2620,12 @@ export class PaystackService {
         if (slot.isReserved) {
           return 'Branding slot was reserved before payment completed';
         }
-        if (slot.isTaken && slot.takenById !== company.id) {
-          return 'Branding slot was taken by another company';
-        }
-        if (
-          isBlockedByOtherCheckoutHold(
-            slot.checkoutHoldExpiresAt,
-            slot.checkoutHoldOrderId,
-            slot.checkoutHoldPaymentId,
-            { orderId },
-          )
-        ) {
-          return 'Branding slot was held by another checkout';
-        }
-        if (!slot.isTaken || slot.takenById !== company.id) {
-          await this.prisma.brandingSlot.update({
-            where: { id: slot.id },
-            data: { isTaken: true, takenById: company.id },
-          });
+        const decremented = await this.prisma.brandingSlot.updateMany({
+          where: { id: slot.id, availableSlots: { gt: 0 } },
+          data: { availableSlots: { decrement: 1 } },
+        });
+        if (decremented.count === 0) {
+          return 'Branding slot sold out before payment completed';
         }
         return null;
       }

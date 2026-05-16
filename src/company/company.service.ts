@@ -336,9 +336,9 @@ export class CompanyService {
       if (!slot) {
         throw new NotFoundException(`Advert slot ${slotId} not found`);
       }
-      if (slot.isTaken || slot.isReserved) {
+      if (slot.availableSlots < slot.totalSlots || slot.isReserved) {
         throw new BadRequestException(
-          `Advert slot "${slot.title}" is not available to attach (taken or reserved)`,
+          `Advert slot "${slot.title}" is not available to attach (sold copies or reserved)`,
         );
       }
       const linkedElsewhere = await tx.sponsorshipPlanAdvertSlot.count({
@@ -360,9 +360,9 @@ export class CompanyService {
       if (!slot) {
         throw new NotFoundException(`Branding slot ${slotId} not found`);
       }
-      if (slot.isTaken || slot.isReserved) {
+      if (slot.availableSlots < slot.totalSlots || slot.isReserved) {
         throw new BadRequestException(
-          `Branding slot "${slot.title}" is not available to attach (taken or reserved)`,
+          `Branding slot "${slot.title}" is not available to attach (sold copies or reserved)`,
         );
       }
       const linkedElsewhere = await tx.sponsorshipPlanBrandingSlot.count({

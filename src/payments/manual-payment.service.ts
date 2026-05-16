@@ -220,14 +220,6 @@ export class ManualPaymentService {
         where: { checkoutHoldOrderId: orderId },
         data: clear,
       }),
-      this.prisma.advertSlot.updateMany({
-        where: { checkoutHoldOrderId: orderId },
-        data: clear,
-      }),
-      this.prisma.brandingSlot.updateMany({
-        where: { checkoutHoldOrderId: orderId },
-        data: clear,
-      }),
     ]);
   }
 }

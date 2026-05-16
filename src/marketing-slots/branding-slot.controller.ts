@@ -20,7 +20,7 @@ export class BrandingSlotController {
   @Get('available')
   @ApiOperation({
     summary: 'List branding slots available for purchase',
-    description: 'Slots where **`isTaken`** and **`isReserved`** are false.',
+    description: 'Slots where **`availableSlots > 0`** and **`isReserved`** is false.',
   })
   listAvailable() {
     return this.brandingSlotService.findAvailable();

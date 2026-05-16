@@ -23,6 +23,7 @@ import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdvertSlotService } from './advert-slot.service';
 import { CreateAdvertSlotMultipartDto } from './dto/create-advert-slot-multipart.dto';
+import { UpdateTotalSlotsDto } from './dto/update-total-slots.dto';
 
 @ApiTags('admin')
 @Controller('api/admin/advert-slots')
@@ -56,6 +57,7 @@ export class AdminAdvertSlotController {
         price: { type: 'integer', example: 5_000_000, description: 'Kobo' },
         description: { type: 'string' },
         isReserved: { type: 'boolean' },
+        totalSlots: { type: 'integer', example: 1, minimum: 1 },
         advertSlotImageUrl: { type: 'string' },
         advertSlotImage: {
           type: 'string',
@@ -83,6 +85,15 @@ export class AdminAdvertSlotController {
   @ApiOperation({ summary: 'Unreserve an advert slot' })
   unreserve(@Param('id') id: string) {
     return this.advertSlotService.unreserve(id);
+  }
+
+  @Patch(':id/total-slots')
+  @ApiOperation({ summary: 'Update the total number of copies for sale' })
+  updateTotalSlots(
+    @Param('id') id: string,
+    @Body() dto: UpdateTotalSlotsDto,
+  ) {
+    return this.advertSlotService.updateTotalSlots(id, dto.totalSlots);
   }
 
   @Delete(':id')

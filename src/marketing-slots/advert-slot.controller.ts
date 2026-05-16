@@ -20,7 +20,7 @@ export class AdvertSlotController {
   @Get('available')
   @ApiOperation({
     summary: 'List advert slots available for purchase',
-    description: 'Slots where **`isTaken`** and **`isReserved`** are false.',
+    description: 'Slots where **`availableSlots > 0`** and **`isReserved`** is false.',
   })
   listAvailable() {
     return this.advertSlotService.findAvailable();

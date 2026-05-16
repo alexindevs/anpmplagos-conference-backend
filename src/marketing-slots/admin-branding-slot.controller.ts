@@ -23,6 +23,7 @@ import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BrandingSlotService } from './branding-slot.service';
 import { CreateBrandingSlotMultipartDto } from './dto/create-branding-slot-multipart.dto';
+import { UpdateTotalSlotsDto } from './dto/update-total-slots.dto';
 
 @ApiTags('admin')
 @Controller('api/admin/branding-slots')
@@ -56,6 +57,7 @@ export class AdminBrandingSlotController {
         price: { type: 'integer', example: 12_000_000, description: 'Kobo' },
         description: { type: 'string' },
         isReserved: { type: 'boolean' },
+        totalSlots: { type: 'integer', example: 1, minimum: 1 },
         brandingSlotImageUrl: { type: 'string' },
         brandingSlotImage: {
           type: 'string',
@@ -83,6 +85,15 @@ export class AdminBrandingSlotController {
   @ApiOperation({ summary: 'Unreserve a branding slot' })
   unreserve(@Param('id') id: string) {
     return this.brandingSlotService.unreserve(id);
+  }
+
+  @Patch(':id/total-slots')
+  @ApiOperation({ summary: 'Update the total number of copies for sale' })
+  updateTotalSlots(
+    @Param('id') id: string,
+    @Body() dto: UpdateTotalSlotsDto,
+  ) {
+    return this.brandingSlotService.updateTotalSlots(id, dto.totalSlots);
   }
 
   @Delete(':id')

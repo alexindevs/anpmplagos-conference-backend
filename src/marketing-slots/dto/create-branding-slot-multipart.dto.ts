@@ -1,11 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   MaxLength,
+  Min,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -47,6 +49,20 @@ export class CreateBrandingSlotMultipartDto {
   @IsOptional()
   @IsBoolean()
   isReserved?: boolean;
+
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Number of identical slots available for sale (defaults to 1)',
+  })
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) return undefined;
+    const n = Number(value);
+    return Number.isNaN(n) ? value : n;
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  totalSlots?: number;
 
   @ApiPropertyOptional({
     description:

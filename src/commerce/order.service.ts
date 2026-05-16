@@ -231,26 +231,6 @@ export class OrderService {
           },
         });
       }
-      if (line.advertSlotId) {
-        await tx.advertSlot.update({
-          where: { id: line.advertSlotId },
-          data: {
-            checkoutHoldExpiresAt: expiresAt,
-            checkoutHoldOrderId: orderId,
-            checkoutHoldPaymentId: null,
-          },
-        });
-      }
-      if (line.brandingSlotId) {
-        await tx.brandingSlot.update({
-          where: { id: line.brandingSlotId },
-          data: {
-            checkoutHoldExpiresAt: expiresAt,
-            checkoutHoldOrderId: orderId,
-            checkoutHoldPaymentId: null,
-          },
-        });
-      }
     }
   }
 

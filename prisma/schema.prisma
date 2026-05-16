@@ -235,8 +235,6 @@ model Company {
   masterclasses            Masterclass[]           @relation("MasterclassTakenBy")
   panels                   PanelSession[]          @relation("PanelSessionTakenBy")
   presentations            Presentation[]          @relation("PresentationTakenBy")
-  advertSlots              AdvertSlot[]            @relation("CompanyAdvertSlots")
-  brandingSlots            BrandingSlot[]          @relation("CompanyBrandingSlots")
   orders                   Order[]
   createdAt                DateTime                @default(now())
   updatedAt                DateTime                @updatedAt
@@ -340,13 +338,9 @@ model AdvertSlot {
   image                 String
   price                 Int // kobo
   description           String?
-  isTaken               Boolean   @default(false)
+  totalSlots            Int       @default(1)
+  availableSlots        Int       @default(1)
   isReserved            Boolean   @default(false)
-  checkoutHoldExpiresAt DateTime?
-  checkoutHoldOrderId   String?
-  checkoutHoldPaymentId String?
-  takenById             String?
-  takenBy               Company?  @relation("CompanyAdvertSlots", fields: [takenById], references: [id], onDelete: SetNull)
   payments              Payment[]
   cartItems             CartItem[]
   orderItems            OrderItem[]
@@ -354,9 +348,8 @@ model AdvertSlot {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  @@index([takenById])
-  @@index([isTaken, isReserved])
-  @@index([checkoutHoldExpiresAt])
+  @@index([availableSlots])
+  @@index([isReserved])
 }
 
 model BrandingSlot {
@@ -365,13 +358,9 @@ model BrandingSlot {
   image                 String
   price                 Int // kobo
   description           String?
-  isTaken               Boolean   @default(false)
+  totalSlots            Int       @default(1)
+  availableSlots        Int       @default(1)
   isReserved            Boolean   @default(false)
-  checkoutHoldExpiresAt DateTime?
-  checkoutHoldOrderId   String?
-  checkoutHoldPaymentId String?
-  takenById             String?
-  takenBy               Company?  @relation("CompanyBrandingSlots", fields: [takenById], references: [id], onDelete: SetNull)
   payments              Payment[]
   cartItems             CartItem[]
   orderItems            OrderItem[]
@@ -379,9 +368,8 @@ model BrandingSlot {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  @@index([takenById])
-  @@index([isTaken, isReserved])
-  @@index([checkoutHoldExpiresAt])
+  @@index([availableSlots])
+  @@index([isReserved])
 }
 
 model RegistrationPlan {

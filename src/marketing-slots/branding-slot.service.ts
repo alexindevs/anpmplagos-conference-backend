@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -15,9 +16,9 @@ export type BrandingSlotAdminListItem = {
   image: string;
   price: number;
   description: string | null;
-  isTaken: boolean;
+  totalSlots: number;
+  availableSlots: number;
   isReserved: boolean;
-  takenBy: { id: string; name: string; slug: string } | null;
 };
 
 @Injectable()
@@ -28,23 +29,11 @@ export class BrandingSlotService {
   ) {}
 
   findAvailable() {
-    const now = new Date();
     return this.prisma.brandingSlot.findMany({
       where: {
-        isTaken: false,
+        availableSlots: { gt: 0 },
         isReserved: false,
         sponsorshipPlanLinks: { none: {} },
-        NOT: {
-          AND: [
-            { checkoutHoldExpiresAt: { gt: now } },
-            {
-              OR: [
-                { checkoutHoldOrderId: { not: null } },
-                { checkoutHoldPaymentId: { not: null } },
-              ],
-            },
-          ],
-        },
       },
       orderBy: [{ createdAt: 'asc' }],
     });
@@ -52,7 +41,11 @@ export class BrandingSlotService {
 
   findMineSanitized(companyId: string) {
     return this.prisma.brandingSlot.findMany({
-      where: { takenById: companyId, isTaken: true },
+      where: {
+        payments: {
+          some: { companyId, status: 'success' },
+        },
+      },
       orderBy: [{ createdAt: 'desc' }],
       select: {
         id: true,
@@ -61,7 +54,8 @@ export class BrandingSlotService {
         price: true,
         description: true,
         isReserved: true,
-        isTaken: true,
+        totalSlots: true,
+        availableSlots: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -74,13 +68,9 @@ export class BrandingSlotService {
     image: string;
     price: number;
     description: string | null;
-    isTaken: boolean;
+    totalSlots: number;
+    availableSlots: number;
     isReserved: boolean;
-    takenBy: {
-      id: string;
-      companyName: string;
-      slug: string;
-    } | null;
   }): BrandingSlotAdminListItem {
     return {
       id: r.id,
@@ -88,25 +78,14 @@ export class BrandingSlotService {
       image: r.image,
       price: r.price,
       description: r.description,
-      isTaken: r.isTaken,
+      totalSlots: r.totalSlots,
+      availableSlots: r.availableSlots,
       isReserved: r.isReserved,
-      takenBy: r.takenBy
-        ? {
-            id: r.takenBy.id,
-            name: r.takenBy.companyName,
-            slug: r.takenBy.slug,
-          }
-        : null,
     };
   }
 
   async findOneForAdmin(id: string): Promise<BrandingSlotAdminListItem> {
-    const r = await this.prisma.brandingSlot.findUnique({
-      where: { id },
-      include: {
-        takenBy: { select: { id: true, companyName: true, slug: true } },
-      },
-    });
+    const r = await this.prisma.brandingSlot.findUnique({ where: { id } });
     if (!r) {
       throw new NotFoundException(`Branding slot ${id} not found`);
     }
@@ -116,9 +95,6 @@ export class BrandingSlotService {
   async findAllForAdmin(): Promise<BrandingSlotAdminListItem[]> {
     const rows = await this.prisma.brandingSlot.findMany({
       orderBy: [{ createdAt: 'desc' }],
-      include: {
-        takenBy: { select: { id: true, companyName: true, slug: true } },
-      },
     });
     return rows.map((row) => this.mapAdminRow(row));
   }
@@ -152,6 +128,8 @@ export class BrandingSlotService {
       );
     }
 
+    const totalSlots = dto.totalSlots ?? 1;
+
     return this.prisma.brandingSlot.create({
       data: {
         title: dto.title,
@@ -159,6 +137,8 @@ export class BrandingSlotService {
         description: dto.description,
         image,
         isReserved: dto.isReserved ?? false,
+        totalSlots,
+        availableSlots: totalSlots,
       },
     });
   }
@@ -167,9 +147,6 @@ export class BrandingSlotService {
     const s = await this.prisma.brandingSlot.findUnique({ where: { id } });
     if (!s) {
       throw new NotFoundException(`Branding slot ${id} not found`);
-    }
-    if (s.isTaken) {
-      throw new BadRequestException('Slot is already purchased');
     }
     return this.prisma.brandingSlot.update({
       where: { id },
@@ -193,8 +170,10 @@ export class BrandingSlotService {
     if (!s) {
       throw new NotFoundException(`Branding slot ${id} not found`);
     }
-    if (s.isTaken) {
-      throw new BadRequestException('Cannot delete a purchased slot');
+    if (s.availableSlots < s.totalSlots) {
+      throw new BadRequestException(
+        'Cannot delete: some copies of this slot have been sold',
+      );
     }
     const pending = await this.prisma.payment.findFirst({
       where: {
@@ -231,34 +210,59 @@ export class BrandingSlotService {
     if (slot.isReserved) {
       throw new BadRequestException('Slot is reserved and cannot be assigned');
     }
-    if (slot.isTaken && slot.takenById !== companyId) {
-      throw new BadRequestException('Slot is already taken by another company');
-    }
-    if (!slot.isTaken || slot.takenById !== companyId) {
-      await this.prisma.brandingSlot.update({
-        where: { id: brandingSlotId },
-        data: { isTaken: true, takenById: companyId },
-      });
+    const result = await this.prisma.brandingSlot.updateMany({
+      where: { id: brandingSlotId, availableSlots: { gt: 0 } },
+      data: { availableSlots: { decrement: 1 } },
+    });
+    if (result.count === 0) {
+      throw new ConflictException('No copies of this branding slot remain');
     }
     return this.findOneForAdmin(brandingSlotId);
   }
 
-  async unassignAdmin(companyId: string, brandingSlotId: string) {
+  async unassignAdmin(_companyId: string, brandingSlotId: string) {
     const slot = await this.prisma.brandingSlot.findUnique({
       where: { id: brandingSlotId },
     });
     if (!slot) {
       throw new NotFoundException(`Branding slot ${brandingSlotId} not found`);
     }
-    if (!slot.isTaken || slot.takenById !== companyId) {
+    if (slot.availableSlots >= slot.totalSlots) {
       throw new BadRequestException(
-        'This branding slot is not assigned to that company',
+        'All copies of this slot are already available',
       );
     }
     await this.prisma.brandingSlot.update({
       where: { id: brandingSlotId },
-      data: { isTaken: false, takenById: null },
+      data: { availableSlots: { increment: 1 } },
     });
     return { ok: true };
+  }
+
+  async updateTotalSlots(
+    id: string,
+    newTotal: number,
+  ): Promise<BrandingSlotAdminListItem> {
+    if (!Number.isInteger(newTotal) || newTotal < 1) {
+      throw new BadRequestException('totalSlots must be a positive integer');
+    }
+    const slot = await this.prisma.brandingSlot.findUnique({ where: { id } });
+    if (!slot) {
+      throw new NotFoundException(`Branding slot ${id} not found`);
+    }
+    const sold = slot.totalSlots - slot.availableSlots;
+    if (newTotal < sold) {
+      throw new BadRequestException(
+        `Cannot reduce totalSlots below sold count (${sold})`,
+      );
+    }
+    await this.prisma.brandingSlot.update({
+      where: { id },
+      data: {
+        totalSlots: newTotal,
+        availableSlots: newTotal - sold,
+      },
+    });
+    return this.findOneForAdmin(id);
   }
 }

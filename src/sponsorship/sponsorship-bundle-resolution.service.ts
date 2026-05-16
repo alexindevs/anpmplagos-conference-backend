@@ -135,31 +135,19 @@ export class SponsorshipBundleResolutionService {
     slot: {
       id: string;
       title: string;
-      isTaken: boolean;
+      availableSlots: number;
       isReserved: boolean;
-      takenById: string | null;
-      checkoutHoldExpiresAt: Date | null;
-      checkoutHoldOrderId: string | null;
-      checkoutHoldPaymentId: string | null;
     },
     label: string,
-    exclude: CheckoutHoldExclude,
   ) {
-    if (slot.isTaken || slot.isReserved) {
+    if (slot.isReserved) {
       throw new BadRequestException(
-        `${label} "${slot.title}" is no longer available for this plan`,
+        `${label} "${slot.title}" is reserved and not available for this plan`,
       );
     }
-    if (
-      isBlockedByOtherCheckoutHold(
-        slot.checkoutHoldExpiresAt,
-        slot.checkoutHoldOrderId,
-        slot.checkoutHoldPaymentId,
-        exclude,
-      )
-    ) {
+    if (slot.availableSlots <= 0) {
       throw new BadRequestException(
-        `${label} "${slot.title}" is held by another checkout`,
+        `${label} "${slot.title}" is sold out`,
       );
     }
   }
@@ -225,15 +213,13 @@ export class SponsorshipBundleResolutionService {
 
     for (const link of plan.advertSlots) {
       const slot = link.advertSlot;
-      this.assertMarketingSlotAvailable(slot, 'Advert slot', opts.exclude);
-      await tx.advertSlot.update({ where: { id: slot.id }, data: hold });
+      this.assertMarketingSlotAvailable(slot, 'Advert slot');
       entry.advertSlotIds.push(slot.id);
     }
 
     for (const link of plan.brandingSlots) {
       const slot = link.brandingSlot;
-      this.assertMarketingSlotAvailable(slot, 'Branding slot', opts.exclude);
-      await tx.brandingSlot.update({ where: { id: slot.id }, data: hold });
+      this.assertMarketingSlotAvailable(slot, 'Branding slot');
       entry.brandingSlotIds.push(slot.id);
     }
 

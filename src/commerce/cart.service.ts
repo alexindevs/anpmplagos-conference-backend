@@ -476,34 +476,15 @@ export class CartService {
   private assertMarketingSlotForCart(
     slot: {
       isReserved: boolean;
-      isTaken: boolean;
-      takenById: string | null;
-      checkoutHoldExpiresAt: Date | null;
-      checkoutHoldOrderId: string | null;
-      checkoutHoldPaymentId: string | null;
+      availableSlots: number;
     },
-    companyId: string,
+    _companyId: string,
   ): void {
     if (slot.isReserved) {
       throw new BadRequestException('This slot is reserved');
     }
-    if (slot.isTaken && slot.takenById !== companyId) {
-      throw new BadRequestException('This slot is already taken');
-    }
-    if (slot.isTaken && slot.takenById === companyId) {
-      throw new BadRequestException('Your company already owns this slot');
-    }
-    if (
-      isBlockedByOtherCheckoutHold(
-        slot.checkoutHoldExpiresAt,
-        slot.checkoutHoldOrderId,
-        slot.checkoutHoldPaymentId,
-        undefined,
-      )
-    ) {
-      throw new BadRequestException(
-        'This slot is held by another checkout in progress',
-      );
+    if (slot.availableSlots <= 0) {
+      throw new BadRequestException('This slot is sold out');
     }
   }
 
