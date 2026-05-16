@@ -54,6 +54,7 @@ const supportMailerLogger = new Logger('SupportMailer');
                 port,
                 secure,
                 auth: { user, pass },
+                family: 4,
               }
             : {
                 streamTransport: true,
