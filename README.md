@@ -1,61 +1,35 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# ANPMP Conference Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-ANPMP Conference Portal – Backend API for the Association of Nigerian Private Medical Practitioners (ANPMP) Lagos State Branch conference management platform.
+Backend API for the Association of Nigerian Private Medical Practitioners (ANPMP) Lagos State Branch conference management platform.
 
 ## Tech Stack
 
-- **NestJS** – Backend framework
-- **Prisma** – ORM with PostgreSQL
-- **JWT + Passport** – Authentication
-- **class-validator / class-transformer** – DTO validation
-- **bcrypt** – Password hashing
+- **NestJS** — Backend framework
+- **Prisma** — ORM with PostgreSQL
+- **Redis** — Caching and session token tracking (via `cache-manager-ioredis-yet`)
+- **JWT + Passport** — Authentication
+- **Paystack** — Payment processing
+- **Cloudinary / Backblaze B2** — File storage (configurable)
+- **class-validator / class-transformer** — DTO validation
+- **bcrypt** — Password hashing
+- **Winston + Loki** — Structured logging
 
 ## Documentation
 
-- **Interactive API** — With the app running, open **`/api/docs`** (Swagger UI) for routes, request bodies, and auth.
-- **Written guides** — Topic guides (exhibitor portal, payments, migrations, admin flows, etc.) live in the **`docs/`** directory at the repo root; browse that folder in your editor or file tree.
+- **Interactive API** — With the app running in a non-production environment, open **`/api/docs`** for Swagger UI (routes, request bodies, auth). Swagger is disabled in `NODE_ENV=production`.
+- **Written guides** — Topic guides (exhibitor portal, payments, migrations, admin flows, etc.) live in the **`docs/`** directory.
 
-## Project setup
+## Setup
 
 ```bash
 npm install
 ```
 
-### Environment
-
-Copy `.env.example` to `.env` and configure:
+Copy `.env.example` to `.env` and fill in all required values:
 
 ```bash
 cp .env.example .env
 ```
-
-Required variables:
-- `DATABASE_URL` – PostgreSQL connection string
-- `JWT_SECRET` – Secret for JWT signing
-- `CORS_ORIGINS` – Allowed frontend origins (comma-separated)
 
 ### Database
 
@@ -65,73 +39,92 @@ npm run prisma:generate
 
 # Run migrations
 npm run prisma:migrate
-
-# Open Prisma Studio (optional)
-npm run prisma:studio
 ```
 
-## Compile and run the project
+## Running the App
 
 ```bash
-# development
-$ yarn run start
+# Development
+npm run start
 
-# watch mode
-$ yarn run start:dev
+# Watch mode
+npm run start:dev
 
-# production mode
-$ yarn run start:prod
+# Production
+npm run start:prod
 ```
 
-## Run tests
+## Environment Variables
+
+### Core
+
+| Variable | Required | Default | Notes |
+|----------|----------|---------|-------|
+| `NODE_ENV` | No | `development` | `development`, `production`, or `test` |
+| `PORT` | No | `4000` | HTTP listen port |
+| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `JWT_SECRET` | Yes | — | Min 32 characters (256-bit) |
+| `JWT_ACCESS_EXPIRES_IN` | No | `15m` | Access token lifetime (e.g. `15m`, `1h`) |
+| `JWT_REFRESH_EXPIRY_DAYS` | No | `7` | Refresh token lifetime in days |
+| `CORS_ORIGINS` | No | `http://localhost:3000` | Comma-separated list of allowed origins |
+| `FRONTEND_URL` | Yes | — | Used in payment redirect URLs |
+| `ADMIN_CODE` | Yes | — | Secret code for admin account creation |
+
+### Redis
+
+Redis is required for caching and admin claim token single-use enforcement.
+
+Supply either a URL or individual connection fields:
+
+| Variable | Required | Default | Notes |
+|----------|----------|---------|-------|
+| `REDIS_URL` | No | — | Full Redis URL (e.g. `redis://:password@host:6379/0`). Takes priority over individual fields if set. |
+| `REDIS_HOST` | No | `localhost` | Used if `REDIS_URL` is not set |
+| `REDIS_PORT` | No | `6379` | Used if `REDIS_URL` is not set |
+| `REDIS_PASSWORD` | No | `""` | Used if `REDIS_URL` is not set |
+| `REDIS_DB` | No | `0` | Database index; used if `REDIS_URL` is not set |
+
+### Storage
+
+| Variable | Required | Default | Notes |
+|----------|----------|---------|-------|
+| `STORAGE_PROVIDER` | No | `cloudinary` | `cloudinary` or `backblaze` |
+| `CLOUDINARY_CLOUD_NAME` | Yes | — | Required regardless of storage provider |
+| `CLOUDINARY_API_KEY` | Yes | — | Required regardless of storage provider |
+| `CLOUDINARY_API_SECRET` | Yes | — | Required regardless of storage provider |
+| `BACKBLAZE_ENDPOINT` | If `backblaze` | — | S3-compatible endpoint URL |
+| `BACKBLAZE_BUCKET_NAME` | If `backblaze` | — | |
+| `BACKBLAZE_KEY_ID` | If `backblaze` | — | Application Key ID |
+| `BACKBLAZE_APP_KEY` | If `backblaze` | — | Application Key |
+| `BACKBLAZE_REGION` | No | — | Optional; some endpoints infer it |
+
+### Payments
+
+| Variable | Required | Default | Notes |
+|----------|----------|---------|-------|
+| `PAYMENT_MODE` | No | `paystack` | `paystack` or `manual` |
+| `PAYSTACK_SECRET_KEY` | If `paystack` | — | Server-side secret key |
+| `PAYSTACK_PUBLIC_KEY` | No | — | Optional; for client reference |
+| `PAYSTACK_BASE_URL` | No | `https://api.paystack.co` | |
+| `PAYSTACK_CALLBACK_URL` | Yes | — | Redirect URL after payment |
+
+### Support / Email
+
+| Variable | Required | Default | Notes |
+|----------|----------|---------|-------|
+| `SUPPORT_EMAILS` | No | — | Comma-separated recipient addresses |
+| `SUPPORT_EMAIL_FROM` | No | — | Sender address |
+| `SUPPORT_SMTP_HOST` | No | — | SMTP server hostname |
+| `SUPPORT_SMTP_PORT` | No | — | SMTP port (as string, e.g. `587`) |
+| `SUPPORT_SMTP_USER` | No | — | SMTP username |
+| `SUPPORT_SMTP_PASS` | No | — | SMTP password |
+
+## Storage Migration
+
+To migrate existing files from Cloudinary to Backblaze B2:
 
 ```bash
-# unit tests
-$ yarn run test
-
-# e2e tests
-$ yarn run test:e2e
-
-# test coverage
-$ yarn run test:cov
+npx ts-node scripts/migrate-to-backblaze.ts
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Requires both Cloudinary and Backblaze credentials in `.env`. The script downloads each file from Cloudinary and re-uploads it to the configured Backblaze bucket.
