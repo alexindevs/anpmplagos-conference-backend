@@ -1950,6 +1950,11 @@ export class PaystackService {
         );
         return;
       }
+      await this.prisma.companyAdvertSlotAssignment.upsert({
+        where: { companyId_advertSlotId: { companyId: company.id, advertSlotId: slot.id } },
+        create: { companyId: company.id, advertSlotId: slot.id },
+        update: {},
+      });
       return;
     }
 
@@ -1984,6 +1989,11 @@ export class PaystackService {
         );
         return;
       }
+      await this.prisma.companyBrandingSlotAssignment.upsert({
+        where: { companyId_brandingSlotId: { companyId: company.id, brandingSlotId: slot.id } },
+        create: { companyId: company.id, brandingSlotId: slot.id },
+        update: {},
+      });
       return;
     }
   }
@@ -2625,6 +2635,11 @@ export class PaystackService {
         if (decremented.count === 0) {
           return 'Advert slot sold out before payment completed';
         }
+        await this.prisma.companyAdvertSlotAssignment.upsert({
+          where: { companyId_advertSlotId: { companyId: company.id, advertSlotId: slot.id } },
+          create: { companyId: company.id, advertSlotId: slot.id },
+          update: {},
+        });
         return null;
       }
       case 'branding_slot': {
@@ -2647,6 +2662,11 @@ export class PaystackService {
         if (decremented.count === 0) {
           return 'Branding slot sold out before payment completed';
         }
+        await this.prisma.companyBrandingSlotAssignment.upsert({
+          where: { companyId_brandingSlotId: { companyId: company.id, brandingSlotId: slot.id } },
+          create: { companyId: company.id, brandingSlotId: slot.id },
+          update: {},
+        });
         return null;
       }
       default:
