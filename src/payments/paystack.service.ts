@@ -2211,6 +2211,8 @@ export class PaystackService {
         where: { checkoutHoldPaymentId: paymentId },
         data: clear,
       }),
+      this.prisma.advertSlotHold.deleteMany({ where: { paymentId } }),
+      this.prisma.brandingSlotHold.deleteMany({ where: { paymentId } }),
     ]);
   }
 
@@ -2241,6 +2243,8 @@ export class PaystackService {
         where: { checkoutHoldOrderId: orderId },
         data: clear,
       }),
+      this.prisma.advertSlotHold.deleteMany({ where: { orderId } }),
+      this.prisma.brandingSlotHold.deleteMany({ where: { orderId } }),
     ]);
   }
 

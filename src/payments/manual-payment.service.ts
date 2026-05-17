@@ -224,6 +224,14 @@ export class ManualPaymentService {
         where: { checkoutHoldOrderId: orderId },
         data: clear,
       }),
+      this.prisma.advertSlotHold.updateMany({
+        where: { orderId },
+        data: { expiresAt: newExpiry },
+      }),
+      this.prisma.brandingSlotHold.updateMany({
+        where: { orderId },
+        data: { expiresAt: newExpiry },
+      }),
     ]);
   }
 }

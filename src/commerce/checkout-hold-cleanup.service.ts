@@ -23,13 +23,15 @@ export class CheckoutHoldCleanupService {
     };
     const where = { checkoutHoldExpiresAt: { lt: now } };
 
-    const [booths, hotelRooms, masterclasses, panels, presentations] =
+    const [booths, hotelRooms, masterclasses, panels, presentations, advertHolds, brandingHolds] =
       await Promise.all([
         this.prisma.booth.updateMany({ where, data: clear }),
         this.prisma.hotelRoom.updateMany({ where, data: clear }),
         this.prisma.masterclass.updateMany({ where, data: clear }),
         this.prisma.panelSession.updateMany({ where, data: clear }),
         this.prisma.presentation.updateMany({ where, data: clear }),
+        this.prisma.advertSlotHold.deleteMany({ where: { expiresAt: { lt: now } } }),
+        this.prisma.brandingSlotHold.deleteMany({ where: { expiresAt: { lt: now } } }),
       ]);
 
     const total =
@@ -37,11 +39,13 @@ export class CheckoutHoldCleanupService {
       hotelRooms.count +
       masterclasses.count +
       panels.count +
-      presentations.count;
+      presentations.count +
+      advertHolds.count +
+      brandingHolds.count;
 
     if (total > 0) {
       this.logger.log(
-        `Released expired checkout holds on ${total} row(s) (booth=${booths.count}, hotelRoom=${hotelRooms.count}, masterclass=${masterclasses.count}, panel=${panels.count}, presentation=${presentations.count})`,
+        `Released expired checkout holds on ${total} row(s) (booth=${booths.count}, hotelRoom=${hotelRooms.count}, masterclass=${masterclasses.count}, panel=${panels.count}, presentation=${presentations.count}, advertSlotHold=${advertHolds.count}, brandingSlotHold=${brandingHolds.count})`,
       );
     }
   }

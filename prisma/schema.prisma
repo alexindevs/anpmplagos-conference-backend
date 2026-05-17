@@ -334,43 +334,75 @@ model Booth {
 }
 
 model AdvertSlot {
-  id                    String    @id @default(cuid())
+  id                    String             @id @default(cuid())
   title                 String
   image                 String
   price                 Int // kobo
   description           String?
-  totalSlots            Int       @default(1)
-  availableSlots        Int       @default(1)
-  isReserved            Boolean   @default(false)
+  totalSlots            Int                @default(1)
+  availableSlots        Int                @default(1)
+  isReserved            Boolean            @default(false)
   payments              Payment[]
   cartItems             CartItem[]
   orderItems            OrderItem[]
   sponsorshipPlanLinks  SponsorshipPlanAdvertSlot[]
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  holds                 AdvertSlotHold[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 
   @@index([availableSlots])
   @@index([isReserved])
 }
 
 model BrandingSlot {
-  id                    String    @id @default(cuid())
+  id                    String               @id @default(cuid())
   title                 String
   image                 String
   price                 Int // kobo
   description           String?
-  totalSlots            Int       @default(1)
-  availableSlots        Int       @default(1)
-  isReserved            Boolean   @default(false)
+  totalSlots            Int                  @default(1)
+  availableSlots        Int                  @default(1)
+  isReserved            Boolean              @default(false)
   payments              Payment[]
   cartItems             CartItem[]
   orderItems            OrderItem[]
   sponsorshipPlanLinks  SponsorshipPlanBrandingSlot[]
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  holds                 BrandingSlotHold[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
   @@index([availableSlots])
   @@index([isReserved])
+}
+
+model AdvertSlotHold {
+  id           String     @id @default(cuid())
+  advertSlotId String
+  advertSlot   AdvertSlot @relation(fields: [advertSlotId], references: [id], onDelete: Cascade)
+  orderId      String?
+  paymentId    String?
+  expiresAt    DateTime
+  createdAt    DateTime   @default(now())
+
+  @@index([advertSlotId])
+  @@index([expiresAt])
+  @@index([orderId])
+  @@index([paymentId])
+}
+
+model BrandingSlotHold {
+  id             String       @id @default(cuid())
+  brandingSlotId String
+  brandingSlot   BrandingSlot @relation(fields: [brandingSlotId], references: [id], onDelete: Cascade)
+  orderId        String?
+  paymentId      String?
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+
+  @@index([brandingSlotId])
+  @@index([expiresAt])
+  @@index([orderId])
+  @@index([paymentId])
 }
 
 model RegistrationPlan {

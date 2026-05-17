@@ -137,6 +137,7 @@ export class SponsorshipBundleResolutionService {
       title: string;
       availableSlots: number;
       isReserved: boolean;
+      _count?: { holds: number };
     },
     label: string,
   ) {
@@ -145,7 +146,8 @@ export class SponsorshipBundleResolutionService {
         `${label} "${slot.title}" is reserved and not available for this plan`,
       );
     }
-    if (slot.availableSlots <= 0) {
+    const activeHolds = slot._count?.holds ?? 0;
+    if (slot.availableSlots - activeHolds <= 0) {
       throw new BadRequestException(
         `${label} "${slot.title}" is sold out`,
       );
@@ -161,11 +163,50 @@ export class SponsorshipBundleResolutionService {
       checkoutTarget: CheckoutTarget;
     },
   ): Promise<SponsorshipBundleResolutionEntry> {
+    const now = new Date();
+    const excludeHoldFilter = [
+      ...(opts.exclude.orderId ? [{ orderId: opts.exclude.orderId }] : []),
+      ...(opts.exclude.paymentId ? [{ paymentId: opts.exclude.paymentId }] : []),
+    ];
     const plan = await tx.sponsorshipPlan.findUnique({
       where: { id: opts.planId },
       include: {
-        advertSlots: { include: { advertSlot: true } },
-        brandingSlots: { include: { brandingSlot: true } },
+        advertSlots: {
+          include: {
+            advertSlot: {
+              include: {
+                _count: {
+                  select: {
+                    holds: {
+                      where: {
+                        expiresAt: { gt: now },
+                        ...(excludeHoldFilter.length ? { NOT: excludeHoldFilter } : {}),
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        brandingSlots: {
+          include: {
+            brandingSlot: {
+              include: {
+                _count: {
+                  select: {
+                    holds: {
+                      where: {
+                        expiresAt: { gt: now },
+                        ...(excludeHoldFilter.length ? { NOT: excludeHoldFilter } : {}),
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
     if (!plan?.isActive) {
@@ -211,15 +252,23 @@ export class SponsorshipBundleResolutionService {
       brandingSlotIds: [],
     };
 
+    const holdData = {
+      orderId: 'orderId' in opts.checkoutTarget ? opts.checkoutTarget.orderId : null,
+      paymentId: 'paymentId' in opts.checkoutTarget ? opts.checkoutTarget.paymentId : null,
+      expiresAt: opts.expiresAt,
+    };
+
     for (const link of plan.advertSlots) {
       const slot = link.advertSlot;
       this.assertMarketingSlotAvailable(slot, 'Advert slot');
+      await tx.advertSlotHold.create({ data: { advertSlotId: slot.id, ...holdData } });
       entry.advertSlotIds.push(slot.id);
     }
 
     for (const link of plan.brandingSlots) {
       const slot = link.brandingSlot;
       this.assertMarketingSlotAvailable(slot, 'Branding slot');
+      await tx.brandingSlotHold.create({ data: { brandingSlotId: slot.id, ...holdData } });
       entry.brandingSlotIds.push(slot.id);
     }
 
