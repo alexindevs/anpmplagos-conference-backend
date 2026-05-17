@@ -2132,6 +2132,12 @@ export class PaystackService {
             data: { availableSlots: { increment: 1 } },
           }),
         ),
+        this.prisma.companyAdvertSlotAssignment.deleteMany({
+          where: { companyId: company.id, advertSlotId: { in: decrementedAdvertIds } },
+        }),
+        this.prisma.companyBrandingSlotAssignment.deleteMany({
+          where: { companyId: company.id, brandingSlotId: { in: decrementedBrandingIds } },
+        }),
       ]);
     };
 
@@ -2156,6 +2162,11 @@ export class PaystackService {
         return 'Bundle advert slot sold out';
       }
       decrementedAdvertIds.push(slot.id);
+      await this.prisma.companyAdvertSlotAssignment.upsert({
+        where: { companyId_advertSlotId: { companyId: company.id, advertSlotId: slot.id } },
+        create: { companyId: company.id, advertSlotId: slot.id },
+        update: {},
+      });
     }
 
     for (const brandingId of bundle.brandingSlotIds) {
@@ -2179,6 +2190,11 @@ export class PaystackService {
         return 'Bundle branding slot sold out';
       }
       decrementedBrandingIds.push(slot.id);
+      await this.prisma.companyBrandingSlotAssignment.upsert({
+        where: { companyId_brandingSlotId: { companyId: company.id, brandingSlotId: slot.id } },
+        create: { companyId: company.id, brandingSlotId: slot.id },
+        update: {},
+      });
     }
 
     return null;

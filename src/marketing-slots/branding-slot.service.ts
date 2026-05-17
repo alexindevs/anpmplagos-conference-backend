@@ -42,9 +42,10 @@ export class BrandingSlotService {
   findMineSanitized(companyId: string) {
     return this.prisma.brandingSlot.findMany({
       where: {
-        payments: {
-          some: { companyId, status: 'success' },
-        },
+        OR: [
+          { payments: { some: { companyId, status: 'success' } } },
+          { companyAssignments: { some: { companyId } } },
+        ],
       },
       orderBy: [{ createdAt: 'desc' }],
       select: {

@@ -236,6 +236,8 @@ model Company {
   masterclasses            Masterclass[]           @relation("MasterclassTakenBy")
   panels                   PanelSession[]          @relation("PanelSessionTakenBy")
   presentations            Presentation[]          @relation("PresentationTakenBy")
+  advertSlotAssignments    CompanyAdvertSlotAssignment[]
+  brandingSlotAssignments  CompanyBrandingSlotAssignment[]
   orders                   Order[]
   createdAt                DateTime                @default(now())
   updatedAt                DateTime                @updatedAt
@@ -347,6 +349,7 @@ model AdvertSlot {
   orderItems            OrderItem[]
   sponsorshipPlanLinks  SponsorshipPlanAdvertSlot[]
   holds                 AdvertSlotHold[]
+  companyAssignments    CompanyAdvertSlotAssignment[]
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
@@ -368,11 +371,38 @@ model BrandingSlot {
   orderItems            OrderItem[]
   sponsorshipPlanLinks  SponsorshipPlanBrandingSlot[]
   holds                 BrandingSlotHold[]
+  companyAssignments    CompanyBrandingSlotAssignment[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
 
   @@index([availableSlots])
   @@index([isReserved])
+}
+
+model CompanyAdvertSlotAssignment {
+  id           String     @id @default(cuid())
+  companyId    String
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  advertSlotId String
+  advertSlot   AdvertSlot @relation(fields: [advertSlotId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([companyId, advertSlotId])
+  @@index([companyId])
+  @@index([advertSlotId])
+}
+
+model CompanyBrandingSlotAssignment {
+  id             String       @id @default(cuid())
+  companyId      String
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  brandingSlotId String
+  brandingSlot   BrandingSlot @relation(fields: [brandingSlotId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([companyId, brandingSlotId])
+  @@index([companyId])
+  @@index([brandingSlotId])
 }
 
 model AdvertSlotHold {
