@@ -159,7 +159,7 @@ export class RegistrationService {
           },
         },
         attendee: {
-          select: { id: true, fullName: true, phone: true },
+          select: { id: true, fullName: true, phone: true, avatar: true },
         },
         payments: {
           where: { kind: 'registration' },
