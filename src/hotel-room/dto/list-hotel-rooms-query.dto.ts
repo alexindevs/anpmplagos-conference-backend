@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class ListHotelRoomsQueryDto {
   @ApiPropertyOptional({ default: 1 })
@@ -15,7 +15,7 @@ export class ListHotelRoomsQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(50)
   pageSize?: number;
 
   @ApiPropertyOptional()
@@ -29,4 +29,9 @@ export class ListHotelRoomsQueryDto {
   @IsString()
   @MaxLength(255)
   roomType?: string;
+
+  @ApiPropertyOptional({ enum: ['available', 'reserved', 'booked'] })
+  @IsOptional()
+  @IsIn(['available', 'reserved', 'booked'])
+  status?: 'available' | 'reserved' | 'booked';
 }

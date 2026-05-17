@@ -36,6 +36,12 @@ export class AdminHotelRoomController {
     return this.hotelRoomService.listAdmin(query);
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Aggregate counts across all rooms (admin)' })
+  stats() {
+    return this.hotelRoomService.getAdminStats();
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create a single room slot (admin)' })
   @ApiBody({ type: CreateHotelRoomDto })

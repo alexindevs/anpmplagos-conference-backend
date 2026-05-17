@@ -70,21 +70,18 @@ export class HotelRoomService {
 
     const where: Prisma.HotelRoomWhereInput = {
       ...(query.hotelName
-        ? {
-            hotelName: {
-              contains: query.hotelName,
-              mode: 'insensitive',
-            },
-          }
+        ? { hotelName: { contains: query.hotelName, mode: 'insensitive' } }
         : {}),
       ...(query.roomType
-        ? {
-            roomType: {
-              contains: query.roomType,
-              mode: 'insensitive',
-            },
-          }
+        ? { roomType: { contains: query.roomType, mode: 'insensitive' } }
         : {}),
+      ...(query.status === 'available'
+        ? { isBooked: false, isReserved: false }
+        : query.status === 'reserved'
+          ? { isReserved: true, isBooked: false }
+          : query.status === 'booked'
+            ? { isBooked: true }
+            : {}),
     };
 
     const [items, total] = await Promise.all([
@@ -101,6 +98,15 @@ export class HotelRoomService {
     ]);
 
     return { items, page, pageSize, total };
+  }
+
+  async getAdminStats() {
+    const [total, booked, reserved] = await Promise.all([
+      this.prisma.hotelRoom.count(),
+      this.prisma.hotelRoom.count({ where: { isBooked: true } }),
+      this.prisma.hotelRoom.count({ where: { isReserved: true, isBooked: false } }),
+    ]);
+    return { total, booked, reserved, available: total - booked - reserved };
   }
 
   createOne(dto: CreateHotelRoomDto) {
