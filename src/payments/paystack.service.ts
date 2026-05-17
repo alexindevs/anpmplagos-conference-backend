@@ -2944,7 +2944,7 @@ export class PaystackService {
 
   async adminInitiateRefund(reference: string): Promise<{
     refunded: boolean;
-    paystackRefunded: boolean;
+    paystackRefunded: boolean | null;
     errors: string[];
   }> {
     const payment = await this.prisma.payment.findUnique({
@@ -2957,7 +2957,9 @@ export class PaystackService {
       );
     }
 
-    const paystackRefunded = await this.requestRefund(reference);
+    const paystackRefunded =
+      payment.provider === 'paystack' ? await this.requestRefund(reference) : null;
+
     const { errors } = await this.reverseFulfillment(payment.id);
     await this.prisma.payment.update({
       where: { id: payment.id },
