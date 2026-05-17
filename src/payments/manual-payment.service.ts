@@ -140,18 +140,22 @@ export class ManualPaymentService {
         authUser.company?.companyName ??
         payment.user.email;
 
-      await this.supportEmail.sendPaymentClaimedEmail({
-        to: adminEmails,
-        userName,
-        userEmail: payment.user.email,
-        reference,
-        paymentKind: payment.kind,
-        baseAmountNgn: (koboNumber(payment.baseAmount) / 100).toLocaleString(
-          'en-NG',
-          { style: 'currency', currency: 'NGN' },
-        ),
-        claimedAt: claimedAt.toISOString(),
-      });
+      this.supportEmail
+        .sendPaymentClaimedEmail({
+          to: adminEmails,
+          userName,
+          userEmail: payment.user.email,
+          reference,
+          paymentKind: payment.kind,
+          baseAmountNgn: (koboNumber(payment.baseAmount) / 100).toLocaleString(
+            'en-NG',
+            { style: 'currency', currency: 'NGN' },
+          ),
+          claimedAt: claimedAt.toISOString(),
+        })
+        .catch((err) =>
+          this.logger.error('Failed to send payment claimed email', err),
+        );
     }
   }
 

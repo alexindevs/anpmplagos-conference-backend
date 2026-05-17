@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
@@ -50,10 +51,15 @@ export class AdminModeratorsService {
     });
 
     const inviteUrl = `${this.frontendUrl}/moderator/accept-invite?token=${token}`;
-    await this.emailService.sendModeratorInviteEmail({
-      to: normalised,
-      inviteUrl,
-    });
+    try {
+      await this.emailService.sendModeratorInviteEmail({
+        to: normalised,
+        inviteUrl,
+      });
+    } catch (err) {
+      this.logger.error('Failed to send moderator invite email', err);
+      throw new ServiceUnavailableException('Could not send invite email. Please try again later.');
+    }
 
     return { message: `Invite sent to ${normalised}` };
   }

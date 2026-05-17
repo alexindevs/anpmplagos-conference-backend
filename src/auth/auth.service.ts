@@ -1,8 +1,10 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
   BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -49,6 +51,8 @@ export interface AuthUser {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -261,7 +265,12 @@ export class AuthService {
     });
 
     const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
-    await sendEmail({ to: email, resetUrl });
+    try {
+      await sendEmail({ to: email, resetUrl });
+    } catch (err) {
+      this.logger.error('Failed to send password reset email', err);
+      throw new ServiceUnavailableException('Could not send reset email. Please try again later.');
+    }
 
     return { message: genericMessage };
   }
