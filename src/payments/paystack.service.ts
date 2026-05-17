@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   Company,
+  Order,
   OrderItem,
   Payment,
   PaymentKind,
@@ -1396,6 +1397,9 @@ export class PaystackService {
         return;
       case 'charge.failed':
         await this.handleChargeFailed(data);
+        return;
+      case 'refund.processed':
+        await this.handleRefundProcessed(data);
         return;
       default:
         this.logger.warn(`Unhandled webhook event: ${event}`);
@@ -2934,5 +2938,506 @@ export class PaystackService {
       pageSize,
       total,
     };
+  }
+
+  // ─── Refund & Inventory Reversal ─────────────────────────────────────────
+
+  async adminInitiateRefund(reference: string): Promise<{
+    refunded: boolean;
+    paystackRefunded: boolean;
+    errors: string[];
+  }> {
+    const payment = await this.prisma.payment.findUnique({
+      where: { reference },
+    });
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.status !== 'success') {
+      throw new BadRequestException(
+        `Payment status is "${payment.status}", only "success" payments can be refunded`,
+      );
+    }
+
+    const paystackRefunded = await this.requestRefund(reference);
+    const { errors } = await this.reverseFulfillment(payment.id);
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { status: 'refunded' },
+    });
+
+    if (errors.length) {
+      this.logger.error(
+        `Partial reversal errors for admin refund ${reference}: ${errors.join('; ')}`,
+      );
+    }
+
+    return { refunded: true, paystackRefunded, errors };
+  }
+
+  async reverseFulfillment(paymentId: string): Promise<{ errors: string[] }> {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: { order: { include: { items: true } } },
+    });
+    if (!payment) return { errors: ['Payment not found'] };
+    if (payment.status === 'refunded') return { errors: [] };
+
+    const errors: string[] = [];
+    const tryReverse = async (label: string, fn: () => Promise<void>) => {
+      try {
+        await fn();
+      } catch (e) {
+        const msg = `${label}: ${e instanceof Error ? e.message : String(e)}`;
+        this.logger.error(`reverseFulfillment ${paymentId} — ${msg}`);
+        errors.push(msg);
+      }
+    };
+
+    switch (payment.kind) {
+      case 'booth':
+        await tryReverse('booth', () =>
+          this.reverseBoothAsset(payment.boothId, payment.companyId, paymentId),
+        );
+        break;
+      case 'masterclass':
+        await tryReverse('masterclass', () =>
+          this.reverseSessionAsset(
+            'masterclass',
+            payment.masterclassId,
+            payment.companyId,
+          ),
+        );
+        break;
+      case 'panel':
+        await tryReverse('panel', () =>
+          this.reverseSessionAsset(
+            'panelSession',
+            payment.panelSessionId,
+            payment.companyId,
+          ),
+        );
+        break;
+      case 'presentation':
+        await tryReverse('presentation', () =>
+          this.reverseSessionAsset(
+            'presentation',
+            payment.presentationId,
+            payment.companyId,
+          ),
+        );
+        break;
+      case 'hotel_room':
+        await tryReverse('hotel_room', () =>
+          this.reverseHotelRoomAsset(payment.hotelRoomId, payment.userId),
+        );
+        break;
+      case 'advert_slot':
+        await tryReverse('advert_slot', () =>
+          this.reverseAdvertSlotAsset(payment.advertSlotId, payment.companyId),
+        );
+        break;
+      case 'branding_slot':
+        await tryReverse('branding_slot', () =>
+          this.reverseBrandingSlotAsset(
+            payment.brandingSlotId,
+            payment.companyId,
+          ),
+        );
+        break;
+      case 'registration':
+        await tryReverse('registration', () =>
+          this.reverseRegistrationAsset(payment.userId),
+        );
+        break;
+      case 'sponsorship_plan':
+        await this.reverseSponsorshipPlanAsset(payment, errors);
+        break;
+      case 'order':
+        await this.reverseOrderAssets(payment, errors);
+        break;
+    }
+
+    return { errors };
+  }
+
+  private async recomputeCompanyTier(
+    companyId: string,
+    excludePaymentId: string,
+  ): Promise<void> {
+    const booths = await this.prisma.booth.findMany({
+      where: { takenById: companyId, isTaken: true, tier: { not: null } },
+      select: { tier: true },
+    });
+
+    const remainingPayments = await this.prisma.payment.findMany({
+      where: {
+        companyId,
+        kind: { in: ['sponsorship_plan', 'order'] },
+        status: 'success',
+        id: { not: excludePaymentId },
+      },
+      select: { sponsorshipResolution: true },
+    });
+
+    const planIds = remainingPayments.flatMap((p) => {
+      const parsed = parseSponsorshipResolution(p.sponsorshipResolution);
+      return (parsed?.bundles ?? []).map((b) => b.sponsorshipPlanId);
+    });
+
+    const plans = planIds.length
+      ? await this.prisma.sponsorshipPlan.findMany({
+          where: { id: { in: planIds } },
+          select: { tier: true },
+        })
+      : [];
+
+    const allTiers = [
+      ...booths.map((b) => b.tier),
+      ...plans.map((p) => p.tier),
+    ];
+
+    const newTier = allTiers.reduce<SponsorTier | null>(
+      (acc, t) => (tierRank(t) > tierRank(acc) ? t : acc),
+      null,
+    );
+
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { highestSponsorshipTier: newTier },
+    });
+  }
+
+  private async reverseBoothAsset(
+    boothId: string | null,
+    companyId: string | null,
+    paymentId: string,
+  ): Promise<void> {
+    if (!boothId || !companyId) return;
+    await this.prisma.booth.updateMany({
+      where: { id: boothId, takenById: companyId },
+      data: { isTaken: false, takenById: null },
+    });
+    await this.recomputeCompanyTier(companyId, paymentId);
+    await Promise.all([
+      this.cacheService.delPattern('booths:*'),
+      this.cacheService.delPattern('admin:booths:*'),
+      this.cacheService.delPattern('admin:dashboard:*'),
+      this.cacheService.delPattern('public:partners:*'),
+    ]);
+  }
+
+  private async reverseSessionAsset(
+    model: 'masterclass' | 'panelSession' | 'presentation',
+    sessionId: string | null,
+    companyId: string | null,
+  ): Promise<void> {
+    if (!sessionId || !companyId) return;
+    const data = { isTaken: false, takenById: null };
+    if (model === 'masterclass') {
+      await this.prisma.masterclass.updateMany({
+        where: { id: sessionId, takenById: companyId },
+        data,
+      });
+    } else if (model === 'panelSession') {
+      await this.prisma.panelSession.updateMany({
+        where: { id: sessionId, takenById: companyId },
+        data,
+      });
+    } else {
+      await this.prisma.presentation.updateMany({
+        where: { id: sessionId, takenById: companyId },
+        data,
+      });
+    }
+    await this.cacheService.delPattern('admin:dashboard:*');
+  }
+
+  private async reverseHotelRoomAsset(
+    roomId: string | null,
+    userId: string,
+  ): Promise<void> {
+    if (!roomId) return;
+    await this.prisma.hotelRoom.updateMany({
+      where: { id: roomId, bookedById: userId },
+      data: { isBooked: false, bookedById: null },
+    });
+    await Promise.all([
+      this.cacheService.delPattern('hotel-rooms:*'),
+      this.cacheService.delPattern('admin:dashboard:*'),
+    ]);
+  }
+
+  private async reverseAdvertSlotAsset(
+    advertSlotId: string | null,
+    companyId: string | null,
+  ): Promise<void> {
+    if (!advertSlotId || !companyId) return;
+    await this.prisma.advertSlot.update({
+      where: { id: advertSlotId },
+      data: { availableSlots: { increment: 1 } },
+    });
+    await this.prisma.companyAdvertSlotAssignment.deleteMany({
+      where: { companyId, advertSlotId },
+    });
+  }
+
+  private async reverseBrandingSlotAsset(
+    brandingSlotId: string | null,
+    companyId: string | null,
+  ): Promise<void> {
+    if (!brandingSlotId || !companyId) return;
+    await this.prisma.brandingSlot.update({
+      where: { id: brandingSlotId },
+      data: { availableSlots: { increment: 1 } },
+    });
+    await this.prisma.companyBrandingSlotAssignment.deleteMany({
+      where: { companyId, brandingSlotId },
+    });
+  }
+
+  private async reverseRegistrationAsset(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { registrationStatus: 'cancelled' },
+    });
+  }
+
+  private async reverseSponsorshipPlanAsset(
+    payment: Payment,
+    errors: string[],
+  ): Promise<void> {
+    if (!payment.companyId) return;
+    const companyId = payment.companyId;
+    const parsed = parseSponsorshipResolution(payment.sponsorshipResolution);
+    const bundle = parsed?.bundles[0];
+
+    if (bundle) {
+      if (bundle.boothId) {
+        try {
+          await this.reverseBoothAsset(bundle.boothId, companyId, payment.id);
+        } catch (e) {
+          errors.push(
+            `bundle booth: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
+      if (bundle.masterclassId) {
+        try {
+          await this.reverseSessionAsset(
+            'masterclass',
+            bundle.masterclassId,
+            companyId,
+          );
+        } catch (e) {
+          errors.push(
+            `bundle masterclass: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
+      if (bundle.presentationId) {
+        try {
+          await this.reverseSessionAsset(
+            'presentation',
+            bundle.presentationId,
+            companyId,
+          );
+        } catch (e) {
+          errors.push(
+            `bundle presentation: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
+      for (const id of bundle.advertSlotIds) {
+        try {
+          await this.reverseAdvertSlotAsset(id, companyId);
+        } catch (e) {
+          errors.push(
+            `bundle advert ${id}: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
+      for (const id of bundle.brandingSlotIds) {
+        try {
+          await this.reverseBrandingSlotAsset(id, companyId);
+        } catch (e) {
+          errors.push(
+            `bundle branding ${id}: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
+    }
+
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { sponsorshipPaidTotalKobo: { decrement: payment.baseAmount } },
+    });
+    await this.recomputeCompanyTier(companyId, payment.id);
+  }
+
+  private async reverseOrderAssets(
+    payment: Payment & { order: (Order & { items: OrderItem[] }) | null },
+    errors: string[],
+  ): Promise<void> {
+    if (!payment.order) return;
+
+    for (const item of payment.order.items) {
+      const label = `order item ${item.id} (${item.type})`;
+      try {
+        switch (item.type) {
+          case 'booth':
+            await this.reverseBoothAsset(
+              item.boothId,
+              payment.companyId,
+              payment.id,
+            );
+            break;
+          case 'masterclass':
+            await this.reverseSessionAsset(
+              'masterclass',
+              item.masterclassId,
+              payment.companyId,
+            );
+            break;
+          case 'panel':
+            await this.reverseSessionAsset(
+              'panelSession',
+              item.panelSessionId,
+              payment.companyId,
+            );
+            break;
+          case 'presentation':
+            await this.reverseSessionAsset(
+              'presentation',
+              item.presentationId,
+              payment.companyId,
+            );
+            break;
+          case 'hotel_room':
+            await this.reverseHotelRoomAsset(item.hotelRoomId, payment.userId);
+            break;
+          case 'advert_slot':
+            await this.reverseAdvertSlotAsset(
+              item.advertSlotId,
+              payment.companyId,
+            );
+            break;
+          case 'branding_slot':
+            await this.reverseBrandingSlotAsset(
+              item.brandingSlotId,
+              payment.companyId,
+            );
+            break;
+          case 'sponsorship_plan': {
+            if (!payment.companyId || !item.sponsorshipPlanId) break;
+            const companyId = payment.companyId;
+            const parsed = parseSponsorshipResolution(
+              payment.sponsorshipResolution,
+            );
+            const bundle = parsed?.bundles.find(
+              (b) => b.sponsorshipPlanId === item.sponsorshipPlanId,
+            );
+            if (bundle) {
+              if (bundle.boothId) {
+                try {
+                  await this.reverseBoothAsset(
+                    bundle.boothId,
+                    companyId,
+                    payment.id,
+                  );
+                } catch (e) {
+                  errors.push(
+                    `${label} bundle booth: ${e instanceof Error ? e.message : String(e)}`,
+                  );
+                }
+              }
+              if (bundle.masterclassId) {
+                try {
+                  await this.reverseSessionAsset(
+                    'masterclass',
+                    bundle.masterclassId,
+                    companyId,
+                  );
+                } catch (e) {
+                  errors.push(
+                    `${label} bundle masterclass: ${e instanceof Error ? e.message : String(e)}`,
+                  );
+                }
+              }
+              if (bundle.presentationId) {
+                try {
+                  await this.reverseSessionAsset(
+                    'presentation',
+                    bundle.presentationId,
+                    companyId,
+                  );
+                } catch (e) {
+                  errors.push(
+                    `${label} bundle presentation: ${e instanceof Error ? e.message : String(e)}`,
+                  );
+                }
+              }
+              for (const id of bundle.advertSlotIds) {
+                try {
+                  await this.reverseAdvertSlotAsset(id, companyId);
+                } catch (e) {
+                  errors.push(
+                    `${label} bundle advert ${id}: ${e instanceof Error ? e.message : String(e)}`,
+                  );
+                }
+              }
+              for (const id of bundle.brandingSlotIds) {
+                try {
+                  await this.reverseBrandingSlotAsset(id, companyId);
+                } catch (e) {
+                  errors.push(
+                    `${label} bundle branding ${id}: ${e instanceof Error ? e.message : String(e)}`,
+                  );
+                }
+              }
+            }
+            const kobo =
+              BigInt(item.unitBaseAmountKobo) * BigInt(item.quantity);
+            await this.prisma.company.update({
+              where: { id: companyId },
+              data: { sponsorshipPaidTotalKobo: { decrement: kobo } },
+            });
+            break;
+          }
+        }
+      } catch (e) {
+        errors.push(
+          `${label}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+
+    if (payment.companyId) {
+      await this.recomputeCompanyTier(payment.companyId, payment.id);
+    }
+  }
+
+  private async handleRefundProcessed(
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    const transaction = data.transaction as
+      | Record<string, unknown>
+      | undefined;
+    const reference = String(transaction?.reference ?? '');
+    if (!reference) return;
+
+    const payment = await this.prisma.payment.findUnique({
+      where: { reference },
+    });
+    if (!payment || payment.status !== 'success') return;
+
+    const { errors } = await this.reverseFulfillment(payment.id);
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { status: 'refunded' },
+    });
+    if (errors.length) {
+      this.logger.error(
+        `Partial reversal errors for refund.processed ${reference}: ${errors.join('; ')}`,
+      );
+    }
   }
 }

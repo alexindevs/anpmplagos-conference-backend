@@ -256,4 +256,15 @@ export class PaymentsController {
     await this.manualPaymentService.adminVerifyPayment(reference, req.user);
     return { message: 'Payment verified and fulfillment applied successfully' };
   }
+
+  @Post('admin/:reference/refund')
+  @UseGuards(JwtAuthGuard, AdminGuard, NonModeratorAdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Admin triggers a Paystack refund and reverses all inventory for a successful payment (superadmin and support only).',
+  })
+  async adminRefundPayment(@Param('reference') reference: string) {
+    return this.paystackService.adminInitiateRefund(reference);
+  }
 }
