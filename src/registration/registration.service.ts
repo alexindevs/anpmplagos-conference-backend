@@ -133,6 +133,7 @@ export class RegistrationService {
         id: string;
         fullName: string;
         phone: string;
+        avatar: string | null;
       } | null;
       payments: Array<{
         reference: string;
@@ -205,6 +206,7 @@ export class RegistrationService {
       response.attendee = {
         fullName: user.attendee.fullName,
         phone: user.attendee.phone,
+        avatar: user.attendee.avatar,
       };
     }
 
