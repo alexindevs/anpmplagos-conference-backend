@@ -233,7 +233,9 @@ export class RegistrationService {
     user?: AuthUser;
   }> {
     const hashedPassword = await bcrypt.hash(dto.password, 10);
-    return this.prisma.$transaction(async (tx) => {
+
+    // Step 1 — fast transaction: all DB writes, no I/O.
+    const result = await this.prisma.$transaction(async (tx) => {
       const existingUser = await tx.user.findUnique({
         where: { email: dto.email },
       });
@@ -249,10 +251,6 @@ export class RegistrationService {
           registrationStatus: 'pending_payment',
         },
       });
-
-      const imagePaths = files
-        ? await this.storage.saveRegistrationImages(user.id, files)
-        : undefined;
 
       if (dto.regType === 'member') {
         const memberDto = dto;
@@ -274,16 +272,11 @@ export class RegistrationService {
             hospitalOrg: memberDto.hospitalOrg!,
             organizationAddress: memberDto.organizationAddress!,
             zone: memberDto.zone!,
-            avatar: imagePaths?.avatar,
           },
         });
       } else if (dto.regType === 'attendee') {
         const attendeeDto = dto;
-        const slug = await this.generateUniqueSlug(
-          tx,
-          'attendee',
-          attendeeDto.fullName!,
-        );
+        const slug = await this.generateUniqueSlug(tx, 'attendee', attendeeDto.fullName!);
         await tx.attendee.create({
           data: {
             userId: user.id,
@@ -295,16 +288,11 @@ export class RegistrationService {
             primarySpecialty: attendeeDto.primarySpecialty ?? undefined,
             hospitalOrg: attendeeDto.hospitalOrg ?? undefined,
             occupation: attendeeDto.occupation ?? undefined,
-            avatar: imagePaths?.avatar,
           },
         });
       } else if (dto.regType === 'company') {
         const companyDto = dto;
-        const slug = await this.generateUniqueSlug(
-          tx,
-          'company',
-          companyDto.companyName!,
-        );
+        const slug = await this.generateUniqueSlug(tx, 'company', companyDto.companyName!);
         await tx.company.create({
           data: {
             userId: user.id,
@@ -317,8 +305,6 @@ export class RegistrationService {
             contactEmail: companyDto.contactEmail!,
             primaryContactName: companyDto.primaryContactName!,
             primaryContactPhone: companyDto.primaryContactPhone!,
-            headerImage: imagePaths?.headerImage,
-            logo: imagePaths?.logo,
             highestSponsorshipTier: 'default',
           },
         });
@@ -351,5 +337,35 @@ export class RegistrationService {
         message: 'Registration saved. Complete payment to confirm.',
       };
     });
+
+    // Step 2 — upload images after the transaction has committed, then patch
+    // the record with the URLs. If this fails the user is registered but
+    // without images — a soft failure that doesn't break the flow.
+    if (files) {
+      const imagePaths = await this.storage.saveRegistrationImages(result.id, files);
+      if (imagePaths) {
+        if (dto.regType === 'member' && imagePaths.avatar) {
+          await this.prisma.member.update({
+            where: { userId: result.id },
+            data: { avatar: imagePaths.avatar },
+          });
+        } else if (dto.regType === 'attendee' && imagePaths.avatar) {
+          await this.prisma.attendee.update({
+            where: { userId: result.id },
+            data: { avatar: imagePaths.avatar },
+          });
+        } else if (dto.regType === 'company') {
+          await this.prisma.company.update({
+            where: { userId: result.id },
+            data: {
+              ...(imagePaths.logo && { logo: imagePaths.logo }),
+              ...(imagePaths.headerImage && { headerImage: imagePaths.headerImage }),
+            },
+          });
+        }
+      }
+    }
+
+    return result;
   }
 }

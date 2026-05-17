@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -12,6 +13,7 @@ import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class AdminModeratorsService {
+  private readonly logger = new Logger(AdminModeratorsService.name);
   private readonly frontendUrl: string;
 
   constructor(
