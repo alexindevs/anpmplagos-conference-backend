@@ -245,7 +245,7 @@ export class SponsorshipBundleResolutionService {
       });
       if (!mc) {
         throw new BadRequestException(
-          'No published masterclass slot matches this plan bundle (duration/day)',
+          'There are no masterclass slots available.',
         );
       }
       await tx.masterclass.update({ where: { id: mc.id }, data: hold });
@@ -260,7 +260,7 @@ export class SponsorshipBundleResolutionService {
       });
       if (!pr) {
         throw new BadRequestException(
-          'No published presentation slot matches this plan bundle (duration/day)',
+          'There are no presentation slots available.',
         );
       }
       await tx.presentation.update({ where: { id: pr.id }, data: hold });
